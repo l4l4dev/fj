@@ -128,6 +128,17 @@ When resuming work in this repository:
 12. When multiple tasks are available, choose the highest-priority task according to Backlog.md.
 13. Treat task IDs as identifiers only; never use them as execution order.
 
+## 13. Human Approval Boundaries
+
+- AI may choose the next task based on Backlog.md status, dependencies, and priority.
+- AI must never change task priority.
+- AI must never change dependencies.
+- AI must never create, delete, or reorder roadmap items.
+- AI must never modify `PROJECT_CONSTITUTION.md` without explicit human approval.
+- AI must never modify `ROADMAP.md` without explicit human approval.
+- AI must never modify Backlog priorities or milestones without explicit human approval.
+- AI may implement, test, update Backlog task status, and stop after completing one task.
+
 <!-- BACKLOG.MD GUIDELINES START -->
 <CRITICAL_INSTRUCTION>
 
