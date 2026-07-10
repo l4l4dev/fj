@@ -42,7 +42,8 @@ If sources conflict or requirements are unclear, stop and ask for clarification.
 4. Propose a design when required and wait for approval.
 5. Implement only the approved scope in small, reviewable changes.
 6. Update affected documentation and tests.
-7. Run relevant verification and report the results, limitations, and remaining work.
+7. Run `make pre-commit` when the Makefile is available, and report the results,
+   limitations, and remaining work.
 
 ## 5. Task Execution Rules
 

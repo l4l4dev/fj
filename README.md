@@ -11,6 +11,18 @@ AI-first CLI for Forgejo
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the repository's contribution
 standards and required review workflow.
 
+## Development
+
+The shared development commands are provided by the repository `Makefile`:
+
+- `make fmt` formats Go sources.
+- `make check-fmt` checks that Go sources are formatted.
+- `make vet` runs static analysis.
+- `make test` runs the Go test suite.
+- `make build` builds all Go packages.
+- `make verify` runs formatting, whitespace, vet, and test checks.
+- `make pre-commit` runs the complete pre-commit verification.
+
 ## Command behavior
 
 - `fj` and `fj --help` print root help to standard output and exit successfully.
