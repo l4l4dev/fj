@@ -1,11 +1,11 @@
 ---
 id: TASK-3.1
 title: List repositories
-status: In Progress
+status: To Do
 assignee:
   - '@codex'
 created_date: '2026-07-10 11:55'
-updated_date: '2026-07-10 17:46'
+updated_date: '2026-07-10 17:56'
 labels: []
 dependencies:
   - TASK-2.9
@@ -34,6 +34,9 @@ Out of scope: XDG/TOML configuration loading, environment credential resolution,
 <!-- AC:BEGIN -->
 - [ ] #1 The CLI Composition Root wires the selected instance and dependencies, renders an explicit human-readable empty result, and presents remote failures through the common CLI error behavior.
 - [ ] #2 The use case requests a page and limit through the Repository Service Port and presents each returned repository with an unambiguous owner/name identity.
+- [ ] #3 The repository list command uses the approved command contract and explicit human-readable output.
+- [ ] #4 The command accepts page and limit flags with defaults page=1 and limit=30, and rejects non-positive values before the remote request.
+- [ ] #5 An empty repository result is rendered explicitly, and each repository identifies owner/name.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -59,4 +62,6 @@ Baseline validation without code changes: gofmt -l . (no output); git diff --che
 Model: GPT-5 — TASK-3.1 introduces a public CLI command, flags, output contract, and composition boundary, requiring high-capability Major Change design and verification
 
 Pre-implementation check (GPT-5): Critical none. Major: command name/flags, page/limit defaults and bounds, empty output wording, and instance display are compatibility-sensitive and require human approval. Minor none. Suggestion: recommended repo list command with page=1, limit=30, positive validation, owner/name output, safe remote category, no JSON/fetch-all. No code implementation started.
+
+Status synchronized to To Do: implementation has not started. Human approval of the CLI contract remains pending; the approved contract is repo list with page/limit flags, page=1 and limit=30 defaults, positive-value validation, explicit empty-result output, and owner/name identity.
 <!-- SECTION:NOTES:END -->

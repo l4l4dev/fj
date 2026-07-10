@@ -4,10 +4,15 @@ title: Update repository metadata
 status: To Do
 assignee: []
 created_date: '2026-07-10 11:55'
-updated_date: '2026-07-10 14:17'
+updated_date: '2026-07-10 17:56'
 labels: []
 dependencies:
   - TASK-2.9
+  - TASK-2.10
+  - TASK-2.11
+  - TASK-2.12
+  - TASK-2.13
+  - TASK-2.14
 references:
   - ROADMAP.md
 parent_task_id: TASK-3
