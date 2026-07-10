@@ -32,6 +32,16 @@ type Getter interface {
 	Get(context.Context, GetRequest) (Repository, error)
 }
 
+type CreateRequest struct {
+	Name        string
+	Description string
+	Private     bool
+}
+
+type Creator interface {
+	Create(context.Context, CreateRequest) (Repository, error)
+}
+
 type RemoteError struct {
 	operation  string
 	statusCode int

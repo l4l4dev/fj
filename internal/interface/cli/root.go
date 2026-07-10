@@ -82,3 +82,20 @@ func mapInspectRepositoryError(err error) error {
 	}
 	return newCommandError(categoryValidation, "inspect repository", err)
 }
+
+func mapCreateRepositoryError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var remoteError applicationrepository.RemoteError
+	if errors.As(err, &remoteError) {
+		if remoteError.StatusCode() == 401 || remoteError.StatusCode() == 403 {
+			return newCommandError(categoryAuthentication, "create repository", err)
+		}
+		if remoteError.StatusCode() == 409 {
+			return newCommandErrorWithMessage(categoryRemote, "create repository", "repository already exists", err)
+		}
+		return newCommandError(categoryRemote, "create repository", err)
+	}
+	return newCommandError(categoryValidation, "create repository", err)
+}

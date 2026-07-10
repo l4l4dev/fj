@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	applicationrepository "github.com/l4l4dev/fj/internal/application/repository"
@@ -20,6 +21,13 @@ func (service *repositoryService) Get(_ context.Context, request applicationrepo
 		return applicationrepository.Repository{}, service.err
 	}
 	return applicationrepository.Repository{Owner: request.Owner, Name: request.Name, Description: "example", DefaultBranch: "main"}, nil
+}
+
+func (service *repositoryService) Create(_ context.Context, request applicationrepository.CreateRequest) (applicationrepository.Repository, error) {
+	if service.err != nil {
+		return applicationrepository.Repository{}, service.err
+	}
+	return applicationrepository.Repository{Owner: "alice", Name: request.Name, Description: request.Description, Private: request.Private}, nil
 }
 
 func (service *repositoryService) List(_ context.Context, request applicationrepository.ListRequest) ([]applicationrepository.Repository, error) {
@@ -141,6 +149,48 @@ func TestRepositoryInspectCommandMapsNotFoundAndAuthenticationErrors(t *testing.
 		}
 		if test.status == 404 && classified.Error() != "inspect repository: repository not found" {
 			t.Fatalf("status 404 leaked detail: %q", classified.Error())
+		}
+	}
+}
+
+func TestRepositoryCreateCommandSendsVisibilityAndDescription(t *testing.T) {
+	for _, test := range []struct {
+		visibility string
+		private    bool
+	}{{"public", false}, {"private", true}} {
+		var output bytes.Buffer
+		command := NewRootCommandWithRepositoryService(&repositoryService{})
+		command.SetOut(&output)
+		command.SetArgs([]string{"repo", "create", "project", "--description", "demo", "--visibility", test.visibility})
+		if err := command.Execute(); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Contains(output.Bytes(), []byte("Repository: alice/project\nDescription: demo\nPrivate: "+map[bool]string{true: "true", false: "false"}[test.private])) {
+			t.Fatalf("output = %q", output.String())
+		}
+	}
+}
+
+func TestRepositoryCreateCommandRejectsInvalidInput(t *testing.T) {
+	for _, args := range [][]string{{"repo", "create", "   "}, {"repo", "create", "project", "--visibility", "unknown"}} {
+		command := NewRootCommandWithRepositoryService(&repositoryService{})
+		command.SetArgs(args)
+		if err := command.Execute(); err == nil {
+			t.Fatalf("args %v were accepted", args)
+		}
+	}
+}
+
+func TestRepositoryCreateCommandMapsErrorsSafely(t *testing.T) {
+	for _, test := range []struct {
+		status int
+		want   string
+	}{{401, "authentication failed"}, {403, "authentication failed"}, {409, "repository already exists"}, {500, "remote operation failed"}} {
+		command := NewRootCommandWithRepositoryService(&repositoryService{err: applicationrepository.NewRemoteError("create repository", test.status)})
+		command.SetArgs([]string{"repo", "create", "project"})
+		err := command.Execute()
+		if err == nil || !strings.Contains(err.Error(), test.want) || strings.Contains(err.Error(), "secret") {
+			t.Fatalf("status %d: %v", test.status, err)
 		}
 	}
 }

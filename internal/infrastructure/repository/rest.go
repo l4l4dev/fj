@@ -15,6 +15,10 @@ type transport interface {
 	Do(context.Context, string, string, url.Values) (*http.Response, error)
 }
 
+type jsonTransport interface {
+	DoJSON(context.Context, string, string, url.Values, []byte) (*http.Response, error)
+}
+
 type RESTAdapter struct {
 	transport transport
 }
@@ -43,7 +47,7 @@ func (adapter *RESTAdapter) List(ctx context.Context, request applicationreposit
 
 	response, err := adapter.transport.Do(ctx, http.MethodGet, "/api/v1/user/repos", query)
 	if err != nil {
-		return nil, translateRemoteError(err)
+		return nil, translateRemoteError(err, "list repositories")
 	}
 	defer response.Body.Close()
 
@@ -63,13 +67,38 @@ func (adapter *RESTAdapter) Get(ctx context.Context, request applicationreposito
 	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name)
 	response, err := adapter.transport.Do(ctx, http.MethodGet, path, nil)
 	if err != nil {
-		return applicationrepository.Repository{}, translateRemoteError(err)
+		return applicationrepository.Repository{}, translateRemoteError(err, "inspect repository")
 	}
 	defer response.Body.Close()
 
 	var decoded forgejoRepository
 	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
 		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("inspect repository", 0)
+	}
+	return toApplicationRepository(decoded), nil
+}
+
+func (adapter *RESTAdapter) Create(ctx context.Context, request applicationrepository.CreateRequest) (applicationrepository.Repository, error) {
+	transport, ok := adapter.transport.(jsonTransport)
+	if !ok {
+		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("create repository", 0)
+	}
+	body, err := json.Marshal(struct {
+		Name        string `json:"name"`
+		Description string `json:"description,omitempty"`
+		Private     bool   `json:"private"`
+	}{Name: request.Name, Description: request.Description, Private: request.Private})
+	if err != nil {
+		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("create repository", 0)
+	}
+	response, err := transport.DoJSON(ctx, http.MethodPost, "/api/v1/user/repos", nil, body)
+	if err != nil {
+		return applicationrepository.Repository{}, translateRemoteError(err, "create repository")
+	}
+	defer response.Body.Close()
+	var decoded forgejoRepository
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("create repository", 0)
 	}
 	return toApplicationRepository(decoded), nil
 }
@@ -85,7 +114,7 @@ func toApplicationRepository(repository forgejoRepository) applicationrepository
 	}
 }
 
-func translateRemoteError(err error) error {
+func translateRemoteError(err error, operation string) error {
 	var safeError interface {
 		Operation() string
 		StatusCode() int
@@ -93,8 +122,9 @@ func translateRemoteError(err error) error {
 	if errors.As(err, &safeError) {
 		return applicationrepository.NewRemoteError(safeError.Operation(), safeError.StatusCode())
 	}
-	return applicationrepository.NewRemoteError("list repositories", 0)
+	return applicationrepository.NewRemoteError(operation, 0)
 }
 
 var _ applicationrepository.Service = (*RESTAdapter)(nil)
 var _ applicationrepository.Getter = (*RESTAdapter)(nil)
+var _ applicationrepository.Creator = (*RESTAdapter)(nil)

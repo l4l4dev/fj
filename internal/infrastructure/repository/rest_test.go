@@ -18,6 +18,16 @@ func (transport transportFunc) Do(ctx context.Context, method, path string, quer
 	return transport(ctx, method, path, query)
 }
 
+type jsonTransportFunc func(context.Context, string, string, url.Values, []byte) (*http.Response, error)
+
+func (transport jsonTransportFunc) Do(ctx context.Context, method, path string, query url.Values) (*http.Response, error) {
+	return transport(ctx, method, path, query, nil)
+}
+
+func (transport jsonTransportFunc) DoJSON(ctx context.Context, method, path string, query url.Values, body []byte) (*http.Response, error) {
+	return transport(ctx, method, path, query, body)
+}
+
 type transportError struct {
 	operation string
 	status    int
@@ -100,6 +110,32 @@ func TestRESTAdapterGetsRepositoryWithEncodedPath(t *testing.T) {
 	want := applicationrepository.Repository{Owner: "alice", Name: "project", Description: "demo", Private: true, DefaultBranch: "main"}
 	if result != want {
 		t.Fatalf("result = %+v, want %+v", result, want)
+	}
+}
+
+func TestRESTAdapterCreatesRepositoryWithJSONBody(t *testing.T) {
+	var method, path string
+	var requestBody string
+	adapter := NewRESTAdapter(jsonTransportFunc(func(_ context.Context, receivedMethod, receivedPath string, query url.Values, body []byte) (*http.Response, error) {
+		method, path = receivedMethod, receivedPath
+		requestBody = string(body)
+		if query != nil {
+			t.Errorf("query = %#v", query)
+		}
+		return &http.Response{StatusCode: http.StatusCreated, Body: io.NopCloser(strings.NewReader(`{"name":"project","owner":{"login":"alice"},"private":true}`))}, nil
+	}))
+	result, err := adapter.Create(context.Background(), applicationrepository.CreateRequest{Name: "project", Description: "demo", Private: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if method != http.MethodPost || path != "/api/v1/user/repos" {
+		t.Fatalf("request = %s %s", method, path)
+	}
+	if !strings.Contains(requestBody, `"name":"project"`) || !strings.Contains(requestBody, `"description":"demo"`) || !strings.Contains(requestBody, `"private":true`) {
+		t.Fatalf("body = %s", requestBody)
+	}
+	if result.Owner != "alice" || result.Name != "project" || !result.Private {
+		t.Fatalf("result = %+v", result)
 	}
 }
 

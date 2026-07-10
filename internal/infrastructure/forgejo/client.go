@@ -1,6 +1,7 @@
 package forgejo
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -38,6 +39,14 @@ func NewClient(instance config.Instance, credential applicationauth.Credential, 
 }
 
 func (forgejoClient client) Do(ctx context.Context, method, apiPath string, query url.Values) (*http.Response, error) {
+	return forgejoClient.do(ctx, method, apiPath, query, nil)
+}
+
+func (forgejoClient client) DoJSON(ctx context.Context, method, apiPath string, query url.Values, body []byte) (*http.Response, error) {
+	return forgejoClient.do(ctx, method, apiPath, query, body)
+}
+
+func (forgejoClient client) do(ctx context.Context, method, apiPath string, query url.Values, body []byte) (*http.Response, error) {
 	target, err := url.JoinPath(forgejoClient.endpoint, apiPath)
 	if err != nil {
 		return nil, newRemoteError("build request", 0)
@@ -48,12 +57,15 @@ func (forgejoClient client) Do(ctx context.Context, method, apiPath string, quer
 	}
 	requestURL.RawQuery = query.Encode()
 
-	request, err := http.NewRequestWithContext(ctx, method, requestURL.String(), nil)
+	request, err := http.NewRequestWithContext(ctx, method, requestURL.String(), bytes.NewReader(body))
 	if err != nil {
 		return nil, newRemoteError("build request", 0)
 	}
 	request.Header.Set("Authorization", "token "+forgejoClient.credential.Value())
 	request.Header.Set("User-Agent", "fj/"+forgejoClient.version)
+	if body != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
 
 	response, err := forgejoClient.httpClient.Do(request)
 	if err != nil {

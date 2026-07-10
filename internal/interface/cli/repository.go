@@ -16,6 +16,50 @@ func newRepositoryCommand(service applicationrepository.Service) *cobra.Command 
 		getter = candidate
 	}
 	command.AddCommand(newRepositoryInspectCommand(getter))
+	var creator applicationrepository.Creator
+	if candidate, ok := service.(applicationrepository.Creator); ok {
+		creator = candidate
+	}
+	command.AddCommand(newRepositoryCreateCommand(creator))
+	return command
+}
+
+func newRepositoryCreateCommand(creator applicationrepository.Creator) *cobra.Command {
+	var description, visibility, instance string
+	command := &cobra.Command{
+		Use: "create NAME", Short: "Create a repository",
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) != 1 || strings.TrimSpace(args[0]) == "" {
+				return newCommandError(categoryValidation, "create repository", fmt.Errorf("repository name is required"))
+			}
+			if visibility != "public" && visibility != "private" {
+				return newCommandError(categoryValidation, "create repository", fmt.Errorf("visibility must be public or private"))
+			}
+			return nil
+		},
+		RunE: func(command *cobra.Command, args []string) error {
+			if creator == nil {
+				service, err := composeRepositoryService(command.Context(), instance)
+				if err != nil {
+					return err
+				}
+				var ok bool
+				creator, ok = service.(applicationrepository.Creator)
+				if !ok {
+					return newCommandError(categoryInternal, "create repository", fmt.Errorf("repository service does not support creation"))
+				}
+			}
+			result, err := applicationrepository.NewCreateUseCase(creator).Execute(command.Context(), applicationrepository.CreateRequest{Name: args[0], Description: description, Private: visibility == "private"})
+			if err != nil {
+				return mapCreateRepositoryError(err)
+			}
+			printRepository(command, result)
+			return nil
+		},
+	}
+	command.Flags().StringVar(&description, "description", "", "repository description")
+	command.Flags().StringVar(&visibility, "visibility", "private", "repository visibility (public or private)")
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 
@@ -75,7 +119,11 @@ func printRepository(command *cobra.Command, repository applicationrepository.Re
 	if description == "" {
 		description = "-"
 	}
-	fmt.Fprintf(command.OutOrStdout(), "Repository: %s/%s\nDescription: %s\nPrivate: %t\nArchived: %t\nDefault branch: %s\n", repository.Owner, repository.Name, description, repository.Private, repository.Archived, repository.DefaultBranch)
+	defaultBranch := repository.DefaultBranch
+	if defaultBranch == "" {
+		defaultBranch = "-"
+	}
+	fmt.Fprintf(command.OutOrStdout(), "Repository: %s/%s\nDescription: %s\nPrivate: %t\nArchived: %t\nDefault branch: %s\n", repository.Owner, repository.Name, description, repository.Private, repository.Archived, defaultBranch)
 }
 
 func newRepositoryListCommand(service applicationrepository.Service) *cobra.Command {
