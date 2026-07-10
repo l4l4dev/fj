@@ -1,11 +1,11 @@
 ---
 id: TASK-3.1
 title: List repositories
-status: To Do
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-07-10 11:55'
-updated_date: '2026-07-10 17:56'
+updated_date: '2026-07-10 23:27'
 labels: []
 dependencies:
   - TASK-2.9
@@ -16,6 +16,12 @@ dependencies:
   - TASK-2.14
 references:
   - ROADMAP.md
+modified_files:
+  - internal/application/repository/list.go
+  - internal/application/repository/list_test.go
+  - internal/interface/cli/root.go
+  - internal/interface/cli/repository.go
+  - internal/interface/cli/repository_test.go
 parent_task_id: TASK-3
 ordinal: 24000
 ---
@@ -32,11 +38,11 @@ Out of scope: XDG/TOML configuration loading, environment credential resolution,
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The CLI Composition Root wires the selected instance and dependencies, renders an explicit human-readable empty result, and presents remote failures through the common CLI error behavior.
-- [ ] #2 The use case requests a page and limit through the Repository Service Port and presents each returned repository with an unambiguous owner/name identity.
-- [ ] #3 The repository list command uses the approved command contract and explicit human-readable output.
-- [ ] #4 The command accepts page and limit flags with defaults page=1 and limit=30, and rejects non-positive values before the remote request.
-- [ ] #5 An empty repository result is rendered explicitly, and each repository identifies owner/name.
+- [x] #1 The CLI Composition Root wires the selected instance and dependencies, renders an explicit human-readable empty result, and presents remote failures through the common CLI error behavior.
+- [x] #2 The use case requests a page and limit through the Repository Service Port and presents each returned repository with an unambiguous owner/name identity.
+- [x] #3 The repository list command uses the approved command contract and explicit human-readable output.
+- [x] #4 The command accepts page and limit flags with defaults page=1 and limit=30, and rejects non-positive values before the remote request.
+- [x] #5 An empty repository result is rendered explicitly, and each repository identifies owner/name.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -64,4 +70,22 @@ Model: GPT-5 — TASK-3.1 introduces a public CLI command, flags, output contrac
 Pre-implementation check (GPT-5): Critical none. Major: command name/flags, page/limit defaults and bounds, empty output wording, and instance display are compatibility-sensitive and require human approval. Minor none. Suggestion: recommended repo list command with page=1, limit=30, positive validation, owner/name output, safe remote category, no JSON/fetch-all. No code implementation started.
 
 Status synchronized to To Do: implementation has not started. Human approval of the CLI contract remains pending; the approved contract is repo list with page/limit flags, page=1 and limit=30 defaults, positive-value validation, explicit empty-result output, and owner/name identity.
+
+Pre-implementation check (GPT-5): Critical none, Major none, Minor none. Approved CLI contract satisfies the Major Change gate. Architecture boundaries remain Interface -> Application -> repository.Service -> Infrastructure; existing credential and HTTP safety boundaries are reused. Suggestion: add Application, CLI, and Composition boundary tests.
+
+Model: GPT-5 — Major Change CLI and Composition Root implementation requiring architecture-aware compatibility and security review.
+
+Validation: make pre-commit passed, including git diff --check, go vet ./..., and go test ./.... Initial sandboxed go test was blocked by Go cache permissions; escalated rerun passed.
+
+Post-implementation review (GPT-5): Critical none, Major none, Minor none. Suggestion: add an explicit --instance Composition Root integration test in future; not required for this approved scope.
+
+Review correction: Major inconsistency identified in repository.RemoteError classification. HTTP 401 and 403 now map to categoryAuthentication; all other repository RemoteError statuses remain categoryRemote. Operation names and safe messages are unchanged.
+
+Validation update: added CLI tests for 401, 403, and 503 classification. make pre-commit passed (git diff --check, go vet ./..., go test ./...).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Corrected TASK-3.1 remote error classification so authentication-related HTTP statuses 401 and 403 produce categoryAuthentication while other remote statuses produce categoryRemote. Added focused CLI coverage and revalidated the full repository.
+<!-- SECTION:FINAL_SUMMARY:END -->
