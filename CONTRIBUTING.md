@@ -55,11 +55,28 @@ complete.
 
 ## Compatibility
 
-Treat public commands, flags, output formats, configuration, JSON contracts,
-exit behavior, and exported APIs as compatibility-sensitive. Preserve existing
-behavior unless an incompatible change has been explicitly approved. Any
-approved incompatible change must document its user impact and provide
-migration guidance.
+Treat the following interfaces as compatibility-sensitive:
+
+- command names and hierarchy, flags, arguments, documented defaults, and
+  command semantics;
+- configuration structure, field meanings, validation behavior, and documented
+  selection precedence;
+- documented human-readable output behavior and machine-readable contracts,
+  including JSON field names, types, and meanings;
+- exit statuses and the documented use of standard output and standard error;
+- exported Go APIs and other interfaces explicitly documented as public.
+
+Preserve these interfaces and their existing behavior unless an incompatible
+change has received the review and explicit human approval required by
+`AGENTS.md`. Additive changes must also be evaluated for effects on scripts,
+configuration, and machine-readable consumers rather than assumed compatible.
+
+An approved incompatible change must document the affected interface, the old
+and new behavior, the user impact, and actionable migration guidance. Update
+the relevant user and design documentation and add or adjust compatibility
+tests where implementation exists. Do not introduce versioning guarantees,
+deprecation periods, or stability tiers unless a separately approved task
+defines them.
 
 ## Review and Commit Scope
 
