@@ -110,6 +110,24 @@ A task is done only when:
 - changed files and user-owned differences are accurately reported;
 - no required approval, decision, or follow-up remains unresolved.
 
+## 12. Session Resume Workflow
+
+When resuming work in this repository:
+
+1. Read `PROJECT_CONSTITUTION.md` first.
+2. Read `ARCHITECTURE.md`.
+3. Read `ROADMAP.md`.
+4. Run `backlog instructions overview`.
+5. Use Backlog.md to determine the next unfinished task.
+6. Read only the documents required for that task.
+7. Never continue work from chat history alone.
+8. Treat the repository as the single source of truth for project state and continuity.
+9. If the previous task is already Done, automatically continue with the next task unless the user explicitly requests otherwise.
+10. Before implementing, summarize the task that will be worked on.
+11. Select tasks according to Backlog.md status and dependencies, not task numbers.
+12. When multiple tasks are available, choose the highest-priority task according to Backlog.md.
+13. Treat task IDs as identifiers only; never use them as execution order.
+
 <!-- BACKLOG.MD GUIDELINES START -->
 <CRITICAL_INSTRUCTION>
 
