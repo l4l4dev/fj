@@ -6,6 +6,11 @@ AI-first CLI for Forgejo
 
 🚧 Under development
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the repository's contribution
+standards and required review workflow.
+
 ## Command behavior
 
 - `fj` and `fj --help` print root help to standard output and exit successfully.
