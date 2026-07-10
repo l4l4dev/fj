@@ -20,8 +20,12 @@ type RESTAdapter struct {
 }
 
 type forgejoRepository struct {
-	Name  string       `json:"name"`
-	Owner forgejoOwner `json:"owner"`
+	Name          string       `json:"name"`
+	Owner         forgejoOwner `json:"owner"`
+	Description   string       `json:"description"`
+	Private       bool         `json:"private"`
+	Archived      bool         `json:"archived"`
+	DefaultBranch string       `json:"default_branch"`
 }
 
 type forgejoOwner struct {
@@ -50,12 +54,35 @@ func (adapter *RESTAdapter) List(ctx context.Context, request applicationreposit
 
 	result := make([]applicationrepository.Repository, 0, len(decoded))
 	for _, repository := range decoded {
-		result = append(result, applicationrepository.Repository{
-			Owner: repository.Owner.Login,
-			Name:  repository.Name,
-		})
+		result = append(result, toApplicationRepository(repository))
 	}
 	return result, nil
+}
+
+func (adapter *RESTAdapter) Get(ctx context.Context, request applicationrepository.GetRequest) (applicationrepository.Repository, error) {
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name)
+	response, err := adapter.transport.Do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return applicationrepository.Repository{}, translateRemoteError(err)
+	}
+	defer response.Body.Close()
+
+	var decoded forgejoRepository
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("inspect repository", 0)
+	}
+	return toApplicationRepository(decoded), nil
+}
+
+func toApplicationRepository(repository forgejoRepository) applicationrepository.Repository {
+	return applicationrepository.Repository{
+		Owner:         repository.Owner.Login,
+		Name:          repository.Name,
+		Description:   repository.Description,
+		Private:       repository.Private,
+		Archived:      repository.Archived,
+		DefaultBranch: repository.DefaultBranch,
+	}
 }
 
 func translateRemoteError(err error) error {
@@ -70,3 +97,4 @@ func translateRemoteError(err error) error {
 }
 
 var _ applicationrepository.Service = (*RESTAdapter)(nil)
+var _ applicationrepository.Getter = (*RESTAdapter)(nil)

@@ -80,6 +80,29 @@ func TestRESTAdapterReturnsNonNilEmptySlice(t *testing.T) {
 	}
 }
 
+func TestRESTAdapterGetsRepositoryWithEncodedPath(t *testing.T) {
+	var receivedMethod, receivedPath string
+	adapter := NewRESTAdapter(transportFunc(func(_ context.Context, method, path string, query url.Values) (*http.Response, error) {
+		receivedMethod, receivedPath = method, path
+		if query != nil {
+			t.Errorf("query = %#v, want nil", query)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"name":"project","owner":{"login":"alice"},"description":"demo","private":true,"archived":false,"default_branch":"main"}`))}, nil
+	}))
+
+	result, err := adapter.Get(context.Background(), applicationrepository.GetRequest{Owner: "alice/team", Name: "project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receivedMethod != http.MethodGet || receivedPath != "/api/v1/repos/alice%2Fteam/project" {
+		t.Fatalf("request = %s %s", receivedMethod, receivedPath)
+	}
+	want := applicationrepository.Repository{Owner: "alice", Name: "project", Description: "demo", Private: true, DefaultBranch: "main"}
+	if result != want {
+		t.Fatalf("result = %+v, want %+v", result, want)
+	}
+}
+
 func TestRESTAdapterTranslatesFailuresSafely(t *testing.T) {
 	const secret = "secret-token"
 	tests := []struct {

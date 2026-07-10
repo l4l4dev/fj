@@ -65,3 +65,20 @@ func mapRepositoryError(err error) error {
 	}
 	return newCommandError(categoryValidation, "list repositories", err)
 }
+
+func mapInspectRepositoryError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var remoteError applicationrepository.RemoteError
+	if errors.As(err, &remoteError) {
+		if remoteError.StatusCode() == 401 || remoteError.StatusCode() == 403 {
+			return newCommandError(categoryAuthentication, "inspect repository", err)
+		}
+		if remoteError.StatusCode() == 404 {
+			return newCommandErrorWithMessage(categoryRemote, "inspect repository", "repository not found", err)
+		}
+		return newCommandError(categoryRemote, "inspect repository", err)
+	}
+	return newCommandError(categoryValidation, "inspect repository", err)
+}

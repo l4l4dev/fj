@@ -15,6 +15,13 @@ type repositoryService struct {
 	err     error
 }
 
+func (service *repositoryService) Get(_ context.Context, request applicationrepository.GetRequest) (applicationrepository.Repository, error) {
+	if service.err != nil {
+		return applicationrepository.Repository{}, service.err
+	}
+	return applicationrepository.Repository{Owner: request.Owner, Name: request.Name, Description: "example", DefaultBranch: "main"}, nil
+}
+
 func (service *repositoryService) List(_ context.Context, request applicationrepository.ListRequest) ([]applicationrepository.Repository, error) {
 	service.request = request
 	return service.result, service.err
@@ -87,5 +94,53 @@ func TestRepositoryListCommandMapsRemoteError(t *testing.T) {
 				t.Fatalf("error = %v, category = %v", err, classified.category)
 			}
 		})
+	}
+}
+
+func TestRepositoryInspectCommandPrintsDetails(t *testing.T) {
+	var output bytes.Buffer
+	command := NewRootCommandWithRepositoryService(&repositoryService{})
+	command.SetOut(&output)
+	command.SetArgs([]string{"repo", "inspect", "alice/project"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	want := "Repository: alice/project\nDescription: example\nPrivate: false\nArchived: false\nDefault branch: main\n"
+	if output.String() != want {
+		t.Fatalf("output = %q, want %q", output.String(), want)
+	}
+}
+
+func TestRepositoryInspectCommandRejectsInvalidTarget(t *testing.T) {
+	for _, target := range []string{"project", "alice/", "/project", "alice/project/extra"} {
+		command := NewRootCommandWithRepositoryService(&repositoryService{})
+		command.SetArgs([]string{"repo", "inspect", target})
+		if err := command.Execute(); err == nil {
+			t.Fatalf("target %q was accepted", target)
+		}
+	}
+}
+
+func TestRepositoryInspectCommandMapsNotFoundAndAuthenticationErrors(t *testing.T) {
+	for _, test := range []struct {
+		status   int
+		category errorCategory
+	}{
+		{status: 404, category: categoryRemote},
+		{status: 401, category: categoryAuthentication},
+		{status: 403, category: categoryAuthentication},
+		{status: 500, category: categoryRemote},
+	} {
+		command := NewRootCommandWithRepositoryService(&repositoryService{err: applicationrepository.NewRemoteError("inspect repository", test.status)})
+		command.SetArgs([]string{"repo", "inspect", "alice/project"})
+		err := command.Execute()
+		var classified commandError
+		if !errors.As(err, &classified) || classified.category != test.category {
+			t.Fatalf("status %d: error = %v, category = %v", test.status, err, classified.category)
+		}
+		if test.status == 404 && classified.Error() != "inspect repository: repository not found" {
+			t.Fatalf("status 404 leaked detail: %q", classified.Error())
+		}
 	}
 }

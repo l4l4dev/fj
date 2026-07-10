@@ -21,6 +21,7 @@ type commandError struct {
 	category  errorCategory
 	operation string
 	cause     error
+	message   string
 }
 
 func newCommandError(category errorCategory, operation string, cause error) error {
@@ -31,7 +32,14 @@ func newCommandError(category errorCategory, operation string, cause error) erro
 	}
 }
 
+func newCommandErrorWithMessage(category errorCategory, operation, message string, cause error) error {
+	return commandError{category: category, operation: operation, message: message, cause: cause}
+}
+
 func (err commandError) Error() string {
+	if err.message != "" {
+		return fmt.Sprintf("%s: %s", err.operation, err.message)
+	}
 	return fmt.Sprintf("%s: %s", err.operation, err.category.message())
 }
 

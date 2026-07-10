@@ -6,8 +6,12 @@ import (
 )
 
 type Repository struct {
-	Owner string
-	Name  string
+	Owner         string
+	Name          string
+	Description   string
+	Private       bool
+	Archived      bool
+	DefaultBranch string
 }
 
 type ListRequest struct {
@@ -17,6 +21,15 @@ type ListRequest struct {
 
 type Service interface {
 	List(context.Context, ListRequest) ([]Repository, error)
+}
+
+type GetRequest struct {
+	Owner string
+	Name  string
+}
+
+type Getter interface {
+	Get(context.Context, GetRequest) (Repository, error)
 }
 
 type RemoteError struct {
