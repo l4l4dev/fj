@@ -28,26 +28,27 @@ func TestRootCommandRejectsInvalidInput(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
-		want string
 	}{
-		{name: "unknown flag", args: []string{"--unknown"}, want: "unknown flag: --unknown"},
-		{name: "unexpected argument", args: []string{"unexpected"}, want: "unknown command \"unexpected\" for \"fj\""},
+		{name: "unknown flag", args: []string{"--unknown"}},
+		{name: "unexpected argument", args: []string{"unexpected"}},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var output bytes.Buffer
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
 			command := NewRootCommand()
-			command.SetOut(&output)
-			command.SetErr(&output)
-			command.SetArgs(test.args)
+			command.SetOut(&stdout)
+			command.SetErr(&stderr)
 
-			err := command.Execute()
-			if err == nil || err.Error() != test.want {
-				t.Fatalf("Execute() error = %v, want %q", err, test.want)
+			if code := Execute(command, test.args); code != categoryValidation.exitCode() {
+				t.Fatalf("Execute() code = %d, want %d", code, categoryValidation.exitCode())
 			}
-			if got := output.String(); got != "Error: "+test.want+"\n" {
-				t.Errorf("error output = %q, want %q", got, "Error: "+test.want+"\n")
+			if got := stdout.String(); got != "" {
+				t.Errorf("standard output = %q, want empty", got)
+			}
+			if got := stderr.String(); got != "Error: execute command: invalid input\n" {
+				t.Errorf("standard error = %q", got)
 			}
 		})
 	}
