@@ -138,6 +138,94 @@ When resuming work in this repository:
 - AI must never modify `ROADMAP.md` without explicit human approval.
 - AI must never modify Backlog priorities or milestones without explicit human approval.
 - AI may implement, test, update Backlog task status, and stop after completing one task.
+- AI may select the next executable task based on Backlog status, dependencies, and priority, and may update task plans, progress, verification results, and completion state through the `backlog` CLI.
+- AI may request the pre-implementation checks and independent reviews required by Section 15.
+- AI must never finalize the design of a major change (Section 15) without human approval.
+- AI must never commit or push without an explicit human request, per Section 10.
+- AI must never advance to a next phase based only on agreement between AI agents; phase transitions require the human approvals defined in Section 6.
+
+## 14. Model Selection
+
+- Before starting a task, choose a model appropriate for the work: use the most capable model available on the agent platform for design, significant reviews, and verification of major changes; small, well-defined implementation work may use a lighter model.
+- Platform-specific model names and dispatch mechanics belong in platform files such as `CLAUDE.md`, not here.
+- Record the model used and the reason for choosing it in the Backlog task.
+- Before recording, check `backlog task edit --help` for an official model field. If one exists, use it. If none exists, do not invent custom metadata fields or edit task files directly; propose recording the model in the task's implementation plan or notes and wait for human approval of that method.
+- Approved recording method (the current CLI has no model field): append one line to the task's Implementation Notes through the `backlog` CLI in the format `Model: <model name> — <reason>`, for example `backlog task edit TASK-123 --append-notes "Model: Fable 5 — architecture-sensitive design"`. Do not add custom Backlog fields. If a future CLI version introduces an official model field, prefer it per the rule above.
+
+## 15. Major Changes
+
+A change is a major change when it involves any of the following:
+
+- modifying `PROJECT_CONSTITUTION.md`;
+- changing important rules in `AGENTS.md`;
+- modifying `ARCHITECTURE.md`;
+- modifying `ROADMAP.md`;
+- changing public CLI commands, flags, output formats, JSON contracts, or exit codes;
+- changing a public API or compatibility guarantee;
+- adding a new external dependency;
+- changing package structure or dependency direction;
+- changing authentication, credential handling, or security boundaries;
+- affecting multiple milestones;
+- large-scale refactoring.
+
+Judge by user impact, compatibility, security, and design boundaries, not by line or file counts alone. When unsure whether a change is major, treat it as major and ask a human.
+
+### Pre-Implementation Check
+
+Before starting a major change, request an assessment from an agent or subagent using the most capable model available on the platform. The assessment must evaluate:
+
+- consistency with `PROJECT_CONSTITUTION.md`, `ARCHITECTURE.md`, and `ROADMAP.md`;
+- scope of impact;
+- backward compatibility;
+- security;
+- alternatives;
+- whether the task granularity is appropriate;
+- whether additional human approval is required.
+
+If the assessment surfaces significant decisions, do not start implementation; wait for human approval. This check supplements, and never replaces, the approval gates in Section 6.
+
+### Post-Implementation Review
+
+After implementation and tests are complete, obtain an independent review by an agent or subagent using the most capable available model. The review must confirm:
+
+- only the approved scope was changed;
+- acceptance criteria are satisfied;
+- architecture boundaries are preserved;
+- no compatibility or security problems were introduced;
+- tests are sufficient;
+- documentation matches the implementation;
+- Backlog records are accurate.
+
+Report the review result to a human. Never commit before human approval.
+
+### Review Finding Classification
+
+Classify every review finding as one of four severities:
+
+- **Critical:** must be resolved before the change can proceed.
+- **Major:** a significant problem that requires a human decision.
+- **Minor:** a small defect or inconsistency.
+- **Suggestion:** an optional improvement.
+
+AI may present findings at any severity. For Major, Minor, and Suggestion findings, AI must not implement fixes on its own; a human decides for each finding whether it is adopted, deferred, or rejected before any fix is made. Critical findings are reported to a human with the highest priority. AI may propose a fix for a Critical finding and, where necessary, implement it, but it must then stop and wait for human confirmation instead of continuing the task or advancing to the next phase. Section 10 governs all commits and pushes regardless of severity.
+
+## 16. Stop-and-Report Rule
+
+After completing one task, stop. Do not start the next task automatically. Selecting the next task is governed by the Session Resume Workflow in Section 12 and begins with the next human work request.
+
+Before stopping, report:
+
+- the selected task and why it was selected;
+- the model used and why;
+- whether subagents were used;
+- the files changed;
+- what was implemented;
+- the tests executed and their results;
+- unverified items, constraints, and remaining work;
+- whether the pre-implementation check and post-implementation review in Section 15 were performed, and their results;
+- a recommended commit message.
+
+Do not commit or push; wait for human confirmation, per Section 10.
 
 <!-- BACKLOG.MD GUIDELINES START -->
 <CRITICAL_INSTRUCTION>
