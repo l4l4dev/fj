@@ -30,9 +30,28 @@ knowledge. Do not modify `PROJECT_CONSTITUTION.md`, `ARCHITECTURE.md`, or
 Add or update tests for every behavior change. Test the relevant success,
 failure, and boundary cases at the narrowest effective architectural layer,
 then run the broader applicable test suite before declaring the work complete.
-Report every command run and its result. If a check fails, is skipped, or cannot
-run in the current environment, report that limitation explicitly; do not claim
-unverified behavior is complete.
+
+Run the checks applicable to the contribution before requesting review:
+
+1. **Formatting:** run `gofmt -l .` and require no output for Go sources. Run
+   `git diff --check` to detect whitespace errors in all changed files.
+2. **Static analysis:** run `go vet ./...` for all Go packages.
+3. **Tests:** run focused tests while developing, then run `go test ./...` as
+   the broader repository suite before completion.
+4. **Documentation:** update user-facing and design documentation affected by
+   the behavior, confirm changed Markdown links resolve to repository files,
+   and verify that documented commands and behavior match the implementation.
+
+Additional checks required by the task, affected subsystem, or review policy
+remain mandatory. Record every command run and its result in the Backlog task
+and completion report.
+
+A failed required check blocks completion until the failure is fixed or a human
+explicitly decides how to proceed. If a check is not applicable, is skipped, or
+cannot run in the current environment, record the check, the reason, the scope
+left unverified, and any alternative verification performed. Do not mark the
+affected acceptance criteria complete or claim the unverified behavior is
+complete.
 
 ## Compatibility
 
