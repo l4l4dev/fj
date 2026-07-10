@@ -9,21 +9,28 @@ Help build and maintain `fj` safely, transparently, and under human direction. F
 ## 2. Repository Structure
 
 - `PROJECT_CONSTITUTION.md`: highest-level project principles and policies.
+- `ARCHITECTURE.md`: approved high-level architecture and dependency boundaries.
+- `ROADMAP.md`: milestone-based direction for project evolution.
+- `CLAUDE.md`: Claude Code-specific guidance that supplements this file.
 - `README.md`: project introduction and user-facing overview.
 - `go.mod`: Go module definition.
 - `AGENTS.md`: operational rules for AI agents.
+- `backlog/`: Backlog.md-managed project tasks and metadata; modify only through the `backlog` CLI.
 
 Inspect the current tree before every task. Do not invent new structure or create files unless the approved task requires it.
 
 ## 3. Source of Truth
 
-Repository documentation is authoritative. Use this precedence order:
+Use this precedence order:
 
-1. The approved task and explicit human instructions
+1. Human instructions
 2. `PROJECT_CONSTITUTION.md`
-3. `AGENTS.md`
-4. Other approved repository documentation
-5. Existing code and tests
+3. Approved design documents
+4. `AGENTS.md`
+5. Task definitions
+6. Implementation
+
+Task definitions must never override `PROJECT_CONSTITUTION.md`.
 
 If sources conflict or requirements are unclear, stop and ask for clarification. Never resolve ambiguity by assumption.
 

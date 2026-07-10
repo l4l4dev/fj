@@ -1,3 +1,6 @@
+# CLAUDE.md
+
+This document provides Claude Code-specific guidance that supplements [AGENTS.md](AGENTS.md). It must never override [PROJECT_CONSTITUTION.md](PROJECT_CONSTITUTION.md) or `AGENTS.md`.
 
 <!-- BACKLOG.MD GUIDELINES START -->
 <CRITICAL_INSTRUCTION>
