@@ -45,3 +45,22 @@ func TestIssueListRejectsCombinedAndRepeatedFilters(t *testing.T) {
 		}
 	}
 }
+
+func TestIssueInspectOutput(t *testing.T) {
+	command := newIssueInspectCommand(inspectorStubForCLI{detail: applicationissue.IssueDetail{Number: 12, Title: "Fix it", State: applicationissue.StateOpen, Body: "Details"}})
+	command.SetArgs([]string{"alice/project", "12"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if want := "Issue: #12\nTitle: Fix it\nState: open\nBody: Details\n"; output.String() != want {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+}
+
+type inspectorStubForCLI struct{ detail applicationissue.IssueDetail }
+
+func (stub inspectorStubForCLI) Inspect(context.Context, applicationissue.InspectRequest) (applicationissue.IssueDetail, error) {
+	return stub.detail, nil
+}

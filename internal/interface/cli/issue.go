@@ -2,15 +2,54 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	applicationissue "github.com/l4l4dev/fj/internal/application/issue"
 	"github.com/spf13/cobra"
 )
 
-func newIssueCommand(lister applicationissue.Lister) *cobra.Command {
+func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.Inspector) *cobra.Command {
 	command := &cobra.Command{Use: "issue", Short: "Manage issues"}
 	command.AddCommand(newIssueListCommand(lister))
+	command.AddCommand(newIssueInspectCommand(inspector))
+	return command
+}
+
+func newIssueInspectCommand(inspector applicationissue.Inspector) *cobra.Command {
+	var instance string
+	command := &cobra.Command{Use: "inspect OWNER/NAME NUMBER", Short: "Inspect an issue", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 2 {
+			return newCommandError(categoryValidation, "inspect issue", fmt.Errorf("OWNER/NAME and issue number are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "inspect issue", err)
+		}
+		number, err := strconv.Atoi(args[1])
+		if err != nil || number < 1 {
+			return newCommandError(categoryValidation, "inspect issue", fmt.Errorf("issue number must be a positive integer"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if inspector == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			inspector = dependencies.IssueInspector
+			if inspector == nil {
+				return newCommandError(categoryInternal, "inspect issue", fmt.Errorf("issue inspector unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		result, err := applicationissue.NewInspectUseCase(inspector).Execute(command.Context(), applicationissue.InspectRequest{Owner: parts[0], Name: parts[1], Number: number})
+		if err != nil {
+			return mapApplicationError(err, "inspect issue")
+		}
+		return (issuePresenter{}).PresentInspect(command.OutOrStdout(), result)
+	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 

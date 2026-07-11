@@ -9,6 +9,15 @@ import (
 
 type issuePresenter struct{}
 
+func (issuePresenter) PresentInspect(w io.Writer, detail applicationissue.IssueDetail) error {
+	body := detail.Body
+	if body == "" {
+		body = "-"
+	}
+	_, err := fmt.Fprintf(w, "Issue: #%d\nTitle: %s\nState: %s\nBody: %s\n", detail.Number, detail.Title, detail.State, body)
+	return err
+}
+
 func (issuePresenter) PresentList(w io.Writer, page applicationissue.Page) error {
 	if _, err := fmt.Fprintln(w, "Issues:"); err != nil {
 		return err

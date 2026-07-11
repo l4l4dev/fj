@@ -22,6 +22,25 @@ type forgejoIssue struct {
 	Number int    `json:"number"`
 	Title  string `json:"title"`
 	State  string `json:"state"`
+	Body   string `json:"body"`
+}
+
+func (adapter *RESTAdapter) Inspect(ctx context.Context, request applicationissue.InspectRequest) (applicationissue.IssueDetail, error) {
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues/" + strconv.Itoa(request.Number)
+	response, err := adapter.transport.Do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return applicationissue.IssueDetail{}, translateInspectError(err)
+	}
+	defer response.Body.Close()
+	var decoded forgejoIssue
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationissue.IssueDetail{}, apperror.New(apperror.Remote, "inspect issue", "")
+	}
+	state := applicationissue.StateClosed
+	if decoded.State == string(applicationissue.StateOpen) {
+		state = applicationissue.StateOpen
+	}
+	return applicationissue.IssueDetail{Number: decoded.Number, Title: decoded.Title, State: state, Body: decoded.Body}, nil
 }
 
 func NewRESTAdapter(transport transport) *RESTAdapter { return &RESTAdapter{transport: transport} }
@@ -75,4 +94,22 @@ func translateRemoteError(err error) error {
 	return apperror.New(apperror.Remote, "list issues", "")
 }
 
+func translateInspectError(err error) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		category := apperror.Remote
+		message := ""
+		switch status.StatusCode() {
+		case 401, 403:
+			category = apperror.Authentication
+		case 404:
+			category = apperror.NotFound
+			message = "issue not found"
+		}
+		return apperror.New(category, "inspect issue", message)
+	}
+	return apperror.New(apperror.Remote, "inspect issue", "")
+}
+
 var _ applicationissue.Lister = (*RESTAdapter)(nil)
+var _ applicationissue.Inspector = (*RESTAdapter)(nil)

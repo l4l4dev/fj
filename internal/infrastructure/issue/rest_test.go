@@ -45,3 +45,14 @@ func TestRESTAdapterMapsIssueFilter(t *testing.T) {
 		t.Fatalf("unexpected label mapping: query=%v err=%v", transport.query, err)
 	}
 }
+
+func TestRESTAdapterInspect(t *testing.T) {
+	transport := &stubTransport{body: `{"number":12,"title":"Fix it","state":"open","body":"Details"}`}
+	result, err := NewRESTAdapter(transport).Inspect(context.Background(), applicationissue.InspectRequest{Owner: "alice", Name: "project", Number: 12})
+	if err != nil || result.Number != 12 || result.Body != "Details" {
+		t.Fatalf("unexpected result: %+v err=%v", result, err)
+	}
+	if transport.path != "/api/v1/repos/alice/project/issues/12" {
+		t.Fatalf("unexpected path: %s", transport.path)
+	}
+}

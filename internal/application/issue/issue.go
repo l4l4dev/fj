@@ -20,6 +20,13 @@ type Issue struct {
 	State  State
 }
 
+type IssueDetail struct {
+	Number int
+	Title  string
+	State  State
+	Body   string
+}
+
 type IssueFilter struct {
 	Assignee string
 	Label    string
@@ -43,6 +50,16 @@ type Page struct {
 
 type Lister interface {
 	List(context.Context, ListRequest) (Page, error)
+}
+
+type InspectRequest struct {
+	Owner  string
+	Name   string
+	Number int
+}
+
+type Inspector interface {
+	Inspect(context.Context, InspectRequest) (IssueDetail, error)
 }
 
 type ListUseCase struct{ lister Lister }
