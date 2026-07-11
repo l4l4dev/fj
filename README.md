@@ -23,9 +23,134 @@ The shared development commands are provided by the repository `Makefile`:
 - `make verify` runs formatting, whitespace, vet, and test checks.
 - `make pre-commit` runs the complete pre-commit verification.
 
-## Install on macOS
+## Install release artifacts
 
-Install `fj` for the current user without `sudo`:
+Public releases are not available yet. Successful `Release foundation` workflow
+runs provide a temporary `fj-<version>-artifacts` workflow artifact. Artifact
+access and retention depend on the repository and its Actions settings.
+
+The initial supported targets are:
+
+| Platform | `uname -s` / `uname -m` | Binary |
+| --- | --- | --- |
+| macOS Apple Silicon | `Darwin` / `arm64` | `fj-<version>-darwin-arm64` |
+| Linux x86-64 | `Linux` / `x86_64` | `fj-<version>-linux-amd64` |
+
+Intel Macs, Linux arm64, Windows, and other targets are not currently
+supported. On Linux, `x86_64` corresponds to the `amd64` artifact name.
+
+### Obtain the workflow artifact
+
+Open the repository's Actions page, select a successful `Release foundation`
+run for the required version, and download `fj-<version>-artifacts` from its
+Artifacts section. Extract the download into a directory of your choice. It
+must contain the two binaries and checksum manifest:
+
+```text
+fj-<version>-checksums.txt
+fj-<version>-darwin-arm64
+fj-<version>-linux-amd64
+```
+
+If the GitHub CLI is already configured, the same artifact can be retrieved
+without putting credentials in the command:
+
+```bash
+VERSION="1.2.3"
+RUN_ID="<run-id>"
+
+gh run download "$RUN_ID" \
+  --name "fj-${VERSION}-artifacts" \
+  --dir "fj-${VERSION}-artifacts"
+```
+
+`VERSION` is the normalized version without the tag's `v` prefix. The example
+tag `v1.2.3` therefore produces filenames containing `1.2.3`.
+
+### Verify the checksums
+
+Run the verification command inside the directory containing all three files.
+On macOS:
+
+```bash
+VERSION="1.2.3"
+shasum -a 256 --check "fj-${VERSION}-checksums.txt"
+```
+
+On Linux:
+
+```bash
+VERSION="1.2.3"
+sha256sum --check "fj-${VERSION}-checksums.txt"
+```
+
+Both commands must report `OK` for both binaries. Do not install or run the
+artifacts if a file is missing or checksum verification fails. A matching
+checksum verifies file integrity; it does not provide signing, notarization,
+provenance, or proof of publisher identity.
+
+### Install fj
+
+After successful verification, install only the binary for the current
+platform. On macOS Apple Silicon:
+
+```bash
+VERSION="1.2.3"
+install -d "$HOME/.local/bin"
+install -m 0755 \
+  "fj-${VERSION}-darwin-arm64" \
+  "$HOME/.local/bin/fj"
+```
+
+On Linux x86-64:
+
+```bash
+VERSION="1.2.3"
+install -d "$HOME/.local/bin"
+install -m 0755 \
+  "fj-${VERSION}-linux-amd64" \
+  "$HOME/.local/bin/fj"
+```
+
+These commands do not require `sudo`. Confirm the injected version directly,
+then verify that the installed directory is on `PATH`:
+
+```bash
+"$HOME/.local/bin/fj" version
+command -v fj
+fj version
+fj --help
+```
+
+The reported version must match `VERSION`. If `command -v fj` does not resolve
+to `$HOME/.local/bin/fj`, add `$HOME/.local/bin` to the appropriate shell
+configuration before using the remaining commands. Continue with
+[Configuration onboarding](#configuration-onboarding) and the
+[Quickstart](#quickstart); credential handling requirements are documented
+there rather than repeated here.
+
+### Uninstall
+
+Confirm that `command -v fj` resolves to `$HOME/.local/bin/fj`, then remove only
+the installed binary:
+
+```bash
+rm "$HOME/.local/bin/fj"
+command -v fj
+```
+
+This does not remove `$HOME/.local/bin`, downloaded artifacts, configuration,
+credentials, or shell settings. A different `fj` installation may still be
+reported after removal.
+
+These workflow artifacts are not permanent public distribution assets. The
+initial binaries are not documented as signed or notarized, and checksum
+success is not a reason to bypass operating-system security warnings. Homebrew,
+package-manager, and system-wide installation are outside the current scope.
+
+## Install from source on macOS
+
+From a repository checkout, install `fj` for the current user without `sudo`:
 
 ```bash
 make install
