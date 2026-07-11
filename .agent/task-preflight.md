@@ -17,6 +17,13 @@ Handling:
 
 - May become an implementation candidate.
 
+If the Decision is not approved:
+
+- Do not start implementation.
+- Use `.agent/decision-plan.md` to organize unresolved decisions.
+- Stop and wait for human approval.
+- Proceed to implementation only after the Decision is approved.
+
 ### Parent / Epic Task
 
 Conditions:
