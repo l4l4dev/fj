@@ -2,12 +2,14 @@ package pullrequest
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
 
+	"github.com/l4l4dev/fj/internal/application/apperror"
 	applicationpullrequest "github.com/l4l4dev/fj/internal/application/pullrequest"
 )
 
@@ -15,6 +17,17 @@ type stubTransport struct {
 	path  string
 	query url.Values
 	body  string
+}
+
+type statusError int
+
+func (err statusError) Error() string   { return "remote failure" }
+func (err statusError) StatusCode() int { return int(err) }
+
+type errorTransport struct{ err error }
+
+func (transport errorTransport) Do(context.Context, string, string, url.Values) (*http.Response, error) {
+	return nil, transport.err
 }
 
 func (s *stubTransport) Do(_ context.Context, _ string, path string, query url.Values) (*http.Response, error) {
@@ -37,6 +50,14 @@ func TestRESTAdapterListEmpty(t *testing.T) {
 	result, err := NewRESTAdapter(&stubTransport{body: `[]`}).List(context.Background(), applicationpullrequest.ListRequest{Owner: "alice", Name: "project", Page: 1, Limit: 20, State: applicationpullrequest.StateOpen})
 	if err != nil || result == nil || len(result) != 0 {
 		t.Fatalf("unexpected empty result: %#v err=%v", result, err)
+	}
+}
+
+func TestRESTAdapterListMapsNotFoundSafely(t *testing.T) {
+	_, err := NewRESTAdapter(errorTransport{err: statusError(http.StatusNotFound)}).List(context.Background(), applicationpullrequest.ListRequest{Owner: "example-owner", Name: "example-repository", Page: 1, Limit: 20, State: applicationpullrequest.StateOpen})
+	var appErr apperror.Error
+	if !errors.As(err, &appErr) || appErr.Category != apperror.NotFound || appErr.Message != "repository not found" {
+		t.Fatalf("error = %#v, want safe not-found application error", err)
 	}
 }
 

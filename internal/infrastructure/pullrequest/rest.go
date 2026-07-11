@@ -84,8 +84,17 @@ func (a *RESTAdapter) Inspect(ctx context.Context, request applicationpullreques
 
 func translateError(err error) error {
 	var status interface{ StatusCode() int }
-	if errors.As(err, &status) && (status.StatusCode() == 401 || status.StatusCode() == 403) {
-		return apperror.New(apperror.Authentication, "list pull requests", "")
+	if errors.As(err, &status) {
+		category := apperror.Remote
+		message := ""
+		switch status.StatusCode() {
+		case 401, 403:
+			category = apperror.Authentication
+		case 404:
+			category = apperror.NotFound
+			message = "repository not found"
+		}
+		return apperror.New(category, "list pull requests", message)
 	}
 	return apperror.New(apperror.Remote, "list pull requests", "")
 }
