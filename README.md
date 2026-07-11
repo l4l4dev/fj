@@ -115,3 +115,36 @@ configured, an explicit `--instance` is required.
 
 Credential values, raw tokens, and credentials embedded in URLs must not be
 printed in command output, error messages, logs, or examples.
+
+## Quickstart
+
+After installing `fj` and configuring an instance profile, confirm the version
+and start with read-only commands confirmed by the current acceptance checks:
+
+```bash
+fj --help
+fj version
+fj --version
+fj repo inspect example-owner/example-repository --instance playground
+fj issue list example-owner/example-repository --instance playground
+fj issue inspect example-owner/example-repository NUMBER --instance playground
+```
+
+Replace `NUMBER` with a non-sensitive issue number available in the selected
+instance. These examples do not create or modify repositories, issues, or pull
+requests.
+
+### Environment-dependent commands
+
+The following commands depend on Forgejo Playground permissions and API
+behavior. They are not presented as guaranteed successful examples:
+
+```bash
+fj repo list --instance playground
+fj pr list example-owner/example-repository --instance playground
+```
+
+Treat failures from these commands as environment-dependent until the selected
+instance's permissions and API compatibility have been verified. Do not record
+credential values, raw tokens, real hostnames, or real repository owners in
+command output or support reports.
