@@ -9,13 +9,99 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.Inspector, creator applicationissue.Creator, updater applicationissue.Updater, stateChanger applicationissue.StateChanger) *cobra.Command {
+func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.Inspector, creator applicationissue.Creator, updater applicationissue.Updater, stateChanger applicationissue.StateChanger, commentViewer applicationissue.CommentViewer, commentCreator applicationissue.CommentCreator) *cobra.Command {
 	command := &cobra.Command{Use: "issue", Short: "Manage issues"}
 	command.AddCommand(newIssueListCommand(lister))
 	command.AddCommand(newIssueInspectCommand(inspector))
 	command.AddCommand(newIssueCreateCommand(creator))
 	command.AddCommand(newIssueUpdateCommand(updater))
 	command.AddCommand(newIssueStateCommand(stateChanger))
+	command.AddCommand(newIssueCommentCommand(commentViewer, commentCreator))
+	return command
+}
+
+func newIssueCommentCommand(viewer applicationissue.CommentViewer, creator applicationissue.CommentCreator) *cobra.Command {
+	command := &cobra.Command{Use: "comment", Short: "Manage issue comments"}
+	command.AddCommand(newIssueCommentListCommand(viewer))
+	command.AddCommand(newIssueCommentAddCommand(creator))
+	return command
+}
+
+func newIssueCommentListCommand(viewer applicationissue.CommentViewer) *cobra.Command {
+	var instance string
+	command := &cobra.Command{Use: "list OWNER/NAME NUMBER", Short: "List issue comments", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 2 {
+			return newCommandError(categoryValidation, "list issue comments", fmt.Errorf("OWNER/NAME and issue number are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "list issue comments", err)
+		}
+		number, err := strconv.Atoi(args[1])
+		if err != nil || number < 1 {
+			return newCommandError(categoryValidation, "list issue comments", fmt.Errorf("issue number must be a positive integer"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if viewer == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			viewer = dependencies.CommentViewer
+			if viewer == nil {
+				return newCommandError(categoryInternal, "list issue comments", fmt.Errorf("comment viewer unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		comments, err := applicationissue.NewListCommentsUseCase(viewer).Execute(command.Context(), applicationissue.ListCommentsRequest{Owner: parts[0], Name: parts[1], Number: number})
+		if err != nil {
+			return mapApplicationError(err, "list issue comments")
+		}
+		return (issuePresenter{}).PresentComments(command.OutOrStdout(), comments)
+	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
+	return command
+}
+
+func newIssueCommentAddCommand(creator applicationissue.CommentCreator) *cobra.Command {
+	var instance, body string
+	command := &cobra.Command{Use: "add OWNER/NAME NUMBER", Short: "Add an issue comment", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 2 {
+			return newCommandError(categoryValidation, "add issue comment", fmt.Errorf("OWNER/NAME and issue number are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "add issue comment", err)
+		}
+		number, err := strconv.Atoi(args[1])
+		if err != nil || number < 1 {
+			return newCommandError(categoryValidation, "add issue comment", fmt.Errorf("issue number must be a positive integer"))
+		}
+		if strings.TrimSpace(body) == "" {
+			return newCommandError(categoryValidation, "add issue comment", fmt.Errorf("comment body is required"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if creator == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			creator = dependencies.CommentCreator
+			if creator == nil {
+				return newCommandError(categoryInternal, "add issue comment", fmt.Errorf("comment creator unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		comment, err := applicationissue.NewAddCommentUseCase(creator).Execute(command.Context(), applicationissue.AddCommentRequest{Owner: parts[0], Name: parts[1], Number: number, Body: body})
+		if err != nil {
+			return mapApplicationError(err, "add issue comment")
+		}
+		return (issuePresenter{}).PresentComment(command.OutOrStdout(), comment)
+	}}
+	command.Flags().StringVar(&body, "body", "", "comment body")
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 

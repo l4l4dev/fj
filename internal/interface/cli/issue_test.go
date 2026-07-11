@@ -98,6 +98,41 @@ func TestIssueStateOutput(t *testing.T) {
 	}
 }
 
+func TestIssueCommentOutputs(t *testing.T) {
+	list := newIssueCommentListCommand(commentViewerStubForCLI{comments: []applicationissue.Comment{{ID: 1, Body: "hello"}}})
+	list.SetArgs([]string{"alice/project", "12"})
+	var listOutput strings.Builder
+	list.SetOut(&listOutput)
+	if err := list.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if want := "Comments:\n- #1 hello\n"; listOutput.String() != want {
+		t.Fatalf("unexpected list output: %q", listOutput.String())
+	}
+	add := newIssueCommentAddCommand(commentCreatorStubForCLI{comment: applicationissue.Comment{ID: 2, Body: "hello"}})
+	add.SetArgs([]string{"alice/project", "12", "--body", "hello"})
+	var addOutput strings.Builder
+	add.SetOut(&addOutput)
+	if err := add.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if want := "Comment:\n#2 hello\n"; addOutput.String() != want {
+		t.Fatalf("unexpected add output: %q", addOutput.String())
+	}
+}
+
+type commentViewerStubForCLI struct{ comments []applicationissue.Comment }
+
+func (stub commentViewerStubForCLI) ListComments(context.Context, applicationissue.ListCommentsRequest) ([]applicationissue.Comment, error) {
+	return stub.comments, nil
+}
+
+type commentCreatorStubForCLI struct{ comment applicationissue.Comment }
+
+func (stub commentCreatorStubForCLI) AddComment(context.Context, applicationissue.AddCommentRequest) (applicationissue.Comment, error) {
+	return stub.comment, nil
+}
+
 type inspectorStubForCLI struct{ detail applicationissue.IssueDetail }
 
 func (stub inspectorStubForCLI) Inspect(context.Context, applicationissue.InspectRequest) (applicationissue.IssueDetail, error) {

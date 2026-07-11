@@ -106,3 +106,19 @@ func TestRESTAdapterChangeState(t *testing.T) {
 		t.Fatalf("unexpected state body: %s", transport.body)
 	}
 }
+
+func TestRESTAdapterComments(t *testing.T) {
+	transport := &stubTransport{body: `[{"id":1,"body":"hello"}]`}
+	comments, err := NewRESTAdapter(transport).ListComments(context.Background(), applicationissue.ListCommentsRequest{Owner: "alice", Name: "project", Number: 12})
+	if err != nil || len(comments) != 1 || comments[0].Body != "hello" || transport.path != "/api/v1/repos/alice/project/issues/12/comments" {
+		t.Fatalf("unexpected comments: %+v path=%s err=%v", comments, transport.path, err)
+	}
+	jsonTransport := &jsonStubTransport{}
+	comment, err := NewRESTAdapter(jsonTransport).AddComment(context.Background(), applicationissue.AddCommentRequest{Owner: "alice", Name: "project", Number: 12, Body: "hello"})
+	if err != nil || comment.Body != "Body" || jsonTransport.method != http.MethodPost || jsonTransport.path != "/api/v1/repos/alice/project/issues/12/comments" {
+		t.Fatalf("unexpected add comment: %+v method=%s path=%s err=%v", comment, jsonTransport.method, jsonTransport.path, err)
+	}
+	if string(jsonTransport.body) != `{"body":"hello"}` {
+		t.Fatalf("unexpected comment body: %s", jsonTransport.body)
+	}
+}

@@ -29,6 +29,11 @@ type forgejoIssue struct {
 	Body   string `json:"body"`
 }
 
+type forgejoComment struct {
+	ID   int64  `json:"id"`
+	Body string `json:"body"`
+}
+
 func (adapter *RESTAdapter) Inspect(ctx context.Context, request applicationissue.InspectRequest) (applicationissue.IssueDetail, error) {
 	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues/" + strconv.Itoa(request.Number)
 	response, err := adapter.transport.Do(ctx, http.MethodGet, path, nil)
@@ -135,6 +140,48 @@ func (adapter *RESTAdapter) ChangeState(ctx context.Context, request application
 		state = applicationissue.StateOpen
 	}
 	return applicationissue.IssueDetail{Number: decoded.Number, Title: decoded.Title, State: state, Body: decoded.Body}, nil
+}
+
+func (adapter *RESTAdapter) ListComments(ctx context.Context, request applicationissue.ListCommentsRequest) ([]applicationissue.Comment, error) {
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues/" + strconv.Itoa(request.Number) + "/comments"
+	response, err := adapter.transport.Do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, translateCommentError(err, "list issue comments")
+	}
+	defer response.Body.Close()
+	var decoded []forgejoComment
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return nil, apperror.New(apperror.Remote, "list issue comments", "")
+	}
+	result := make([]applicationissue.Comment, 0, len(decoded))
+	for _, comment := range decoded {
+		result = append(result, applicationissue.Comment{ID: comment.ID, Body: comment.Body})
+	}
+	return result, nil
+}
+
+func (adapter *RESTAdapter) AddComment(ctx context.Context, request applicationissue.AddCommentRequest) (applicationissue.Comment, error) {
+	jsonClient, ok := adapter.transport.(jsonTransport)
+	if !ok {
+		return applicationissue.Comment{}, apperror.New(apperror.Remote, "add issue comment", "")
+	}
+	body, err := json.Marshal(struct {
+		Body string `json:"body"`
+	}{Body: request.Body})
+	if err != nil {
+		return applicationissue.Comment{}, apperror.New(apperror.Remote, "add issue comment", "")
+	}
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues/" + strconv.Itoa(request.Number) + "/comments"
+	response, err := jsonClient.DoJSON(ctx, http.MethodPost, path, nil, body)
+	if err != nil {
+		return applicationissue.Comment{}, translateCommentError(err, "add issue comment")
+	}
+	defer response.Body.Close()
+	var decoded forgejoComment
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationissue.Comment{}, apperror.New(apperror.Remote, "add issue comment", "")
+	}
+	return applicationissue.Comment{ID: decoded.ID, Body: decoded.Body}, nil
 }
 
 func NewRESTAdapter(transport transport) *RESTAdapter { return &RESTAdapter{transport: transport} }
@@ -265,8 +312,27 @@ func translateStateError(err error) error {
 	return apperror.New(apperror.Remote, "change issue state", "")
 }
 
+func translateCommentError(err error, operation string) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		category := apperror.Remote
+		message := ""
+		switch status.StatusCode() {
+		case 401, 403:
+			category = apperror.Authentication
+		case 404:
+			category = apperror.NotFound
+			message = "issue not found"
+		}
+		return apperror.New(category, operation, message)
+	}
+	return apperror.New(apperror.Remote, operation, "")
+}
+
 var _ applicationissue.Lister = (*RESTAdapter)(nil)
 var _ applicationissue.Inspector = (*RESTAdapter)(nil)
 var _ applicationissue.Creator = (*RESTAdapter)(nil)
 var _ applicationissue.Updater = (*RESTAdapter)(nil)
 var _ applicationissue.StateChanger = (*RESTAdapter)(nil)
+var _ applicationissue.CommentViewer = (*RESTAdapter)(nil)
+var _ applicationissue.CommentCreator = (*RESTAdapter)(nil)

@@ -30,12 +30,14 @@ type RepositoryDependencies struct {
 	IssueCreator      applicationissue.Creator
 	IssueUpdater      applicationissue.Updater
 	IssueStateChanger applicationissue.StateChanger
+	CommentViewer     applicationissue.CommentViewer
+	CommentCreator    applicationissue.CommentCreator
 }
 
 func NewRootCommandWithDependencies(dependencies RepositoryDependencies) *cobra.Command {
 	command := &cobra.Command{Use: "fj", Short: "AI-first CLI for Forgejo", Args: cobra.NoArgs, SilenceErrors: true, SilenceUsage: true, RunE: func(command *cobra.Command, _ []string) error { return command.Help() }}
 	command.AddCommand(newRepositoryCommand(dependencies))
-	command.AddCommand(newIssueCommand(dependencies.Issues, dependencies.IssueInspector, dependencies.IssueCreator, dependencies.IssueUpdater, dependencies.IssueStateChanger))
+	command.AddCommand(newIssueCommand(dependencies.Issues, dependencies.IssueInspector, dependencies.IssueCreator, dependencies.IssueUpdater, dependencies.IssueStateChanger, dependencies.CommentViewer, dependencies.CommentCreator))
 	command.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return newCommandError(categoryValidation, "execute command", err)
 	})
@@ -81,7 +83,7 @@ func composeRepositoryDependencies(ctx context.Context, instanceName string) (Re
 	}
 	adapter := infrastructurerepository.NewRESTAdapter(forgejo.NewClient(instance, credential, "dev", nil))
 	issueAdapter := infrastructureissue.NewRESTAdapter(forgejo.NewClient(instance, credential, "dev", nil))
-	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter, Issues: issueAdapter, IssueInspector: issueAdapter, IssueCreator: issueAdapter, IssueUpdater: issueAdapter, IssueStateChanger: issueAdapter}, nil
+	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter, Issues: issueAdapter, IssueInspector: issueAdapter, IssueCreator: issueAdapter, IssueUpdater: issueAdapter, IssueStateChanger: issueAdapter, CommentViewer: issueAdapter, CommentCreator: issueAdapter}, nil
 }
 
 func mapApplicationError(err error, operation string) error {

@@ -10,6 +10,27 @@ import (
 
 type issuePresenter struct{}
 
+func (issuePresenter) PresentComments(w io.Writer, comments []applicationissue.Comment) error {
+	if _, err := fmt.Fprintln(w, "Comments:"); err != nil {
+		return err
+	}
+	if len(comments) == 0 {
+		_, err := fmt.Fprintln(w, "No comments found.")
+		return err
+	}
+	for _, comment := range comments {
+		if _, err := fmt.Fprintf(w, "- #%d %s\n", comment.ID, comment.Body); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (issuePresenter) PresentComment(w io.Writer, comment applicationissue.Comment) error {
+	_, err := fmt.Fprintf(w, "Comment:\n#%d %s\n", comment.ID, comment.Body)
+	return err
+}
+
 func (issuePresenter) PresentState(w io.Writer, detail applicationissue.IssueDetail) error {
 	_, err := fmt.Fprintf(w, "Issue: #%d\nState: %s\n", detail.Number, detail.State)
 	return err
