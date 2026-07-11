@@ -144,3 +144,24 @@ func mapArchiveRepositoryError(err error, operation string) error {
 	}
 	return newCommandError(categoryInternal, operation, err)
 }
+
+func mapAccessRepositoryError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var remoteError applicationrepository.RemoteError
+	if errors.As(err, &remoteError) {
+		if remoteError.StatusCode() == 401 || remoteError.StatusCode() == 403 {
+			return newCommandError(categoryAuthentication, "view repository access", err)
+		}
+		if remoteError.StatusCode() == 404 {
+			return newCommandErrorWithMessage(categoryRemote, "view repository access", "repository not found", err)
+		}
+		return newCommandError(categoryRemote, "view repository access", err)
+	}
+	var validationError applicationrepository.ValidationError
+	if errors.As(err, &validationError) {
+		return newCommandError(categoryValidation, "view repository access", err)
+	}
+	return newCommandError(categoryInternal, "view repository access", err)
+}

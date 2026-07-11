@@ -32,6 +32,52 @@ func newRepositoryCommand(service applicationrepository.Service) *cobra.Command 
 	}
 	command.AddCommand(newRepositoryArchiveCommand(archiver, true))
 	command.AddCommand(newRepositoryArchiveCommand(archiver, false))
+	var accessViewer applicationrepository.AccessViewer
+	if candidate, ok := service.(applicationrepository.AccessViewer); ok {
+		accessViewer = candidate
+	}
+	command.AddCommand(newRepositoryAccessCommand(accessViewer))
+	return command
+}
+
+func newRepositoryAccessCommand(viewer applicationrepository.AccessViewer) *cobra.Command {
+	var instance string
+	command := &cobra.Command{Use: "access OWNER/NAME", Short: "View repository access", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			return newCommandError(categoryValidation, "view repository access", fmt.Errorf("OWNER/NAME is required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "view repository access", err)
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if viewer == nil {
+			service, err := composeRepositoryService(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			var ok bool
+			viewer, ok = service.(applicationrepository.AccessViewer)
+			if !ok {
+				return newCommandError(categoryInternal, "view repository access", fmt.Errorf("access viewer unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		result, err := applicationrepository.NewAccessUseCase(viewer).Execute(command.Context(), applicationrepository.AccessRequest{Owner: parts[0], Name: parts[1]})
+		if err != nil {
+			return mapAccessRepositoryError(err)
+		}
+		fmt.Fprintf(command.OutOrStdout(), "Repository: %s/%s\nCollaborators:\n", result.Owner, result.Name)
+		if len(result.Collaborators) == 0 {
+			fmt.Fprintln(command.OutOrStdout(), "No collaborators found.")
+			return nil
+		}
+		for _, collaborator := range result.Collaborators {
+			fmt.Fprintf(command.OutOrStdout(), "- %s: %s\n", collaborator.Username, collaborator.Permission)
+		}
+		return nil
+	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 

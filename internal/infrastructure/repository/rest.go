@@ -36,6 +36,17 @@ type forgejoOwner struct {
 	Login string `json:"login"`
 }
 
+type forgejoCollaborator struct {
+	User struct {
+		Login string `json:"login"`
+	} `json:"user"`
+	Permissions struct {
+		Pull  bool `json:"pull"`
+		Push  bool `json:"push"`
+		Admin bool `json:"admin"`
+	} `json:"permissions"`
+}
+
 func NewRESTAdapter(transport transport) *RESTAdapter {
 	return &RESTAdapter{transport: transport}
 }
@@ -162,6 +173,30 @@ func (adapter *RESTAdapter) SetArchived(ctx context.Context, request application
 	return toApplicationRepository(decoded), nil
 }
 
+func (adapter *RESTAdapter) ViewAccess(ctx context.Context, request applicationrepository.AccessRequest) (applicationrepository.RepositoryAccess, error) {
+	response, err := adapter.transport.Do(ctx, http.MethodGet, "/api/v1/repos/"+url.PathEscape(request.Owner)+"/"+url.PathEscape(request.Name)+"/collaborators", nil)
+	if err != nil {
+		return applicationrepository.RepositoryAccess{}, translateRemoteError(err, "view repository access")
+	}
+	defer response.Body.Close()
+	var decoded []forgejoCollaborator
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationrepository.RepositoryAccess{}, applicationrepository.NewRemoteError("view repository access", 0)
+	}
+	result := applicationrepository.RepositoryAccess{Owner: request.Owner, Name: request.Name, Collaborators: make([]applicationrepository.Collaborator, 0, len(decoded))}
+	for _, collaborator := range decoded {
+		permission := applicationrepository.PermissionRead
+		if collaborator.Permissions.Push {
+			permission = applicationrepository.PermissionWrite
+		}
+		if collaborator.Permissions.Admin {
+			permission = applicationrepository.PermissionAdmin
+		}
+		result.Collaborators = append(result.Collaborators, applicationrepository.Collaborator{Username: collaborator.User.Login, Permission: permission})
+	}
+	return result, nil
+}
+
 func toApplicationRepository(repository forgejoRepository) applicationrepository.Repository {
 	return applicationrepository.Repository{
 		Owner:         repository.Owner.Login,
@@ -189,3 +224,4 @@ var _ applicationrepository.Getter = (*RESTAdapter)(nil)
 var _ applicationrepository.Creator = (*RESTAdapter)(nil)
 var _ applicationrepository.Updater = (*RESTAdapter)(nil)
 var _ applicationrepository.Archiver = (*RESTAdapter)(nil)
+var _ applicationrepository.AccessViewer = (*RESTAdapter)(nil)

@@ -51,6 +51,13 @@ func (service *repositoryService) SetArchived(_ context.Context, request applica
 	return applicationrepository.Repository{Owner: request.Owner, Name: request.Name, Archived: request.Archived}, nil
 }
 
+func (service *repositoryService) ViewAccess(_ context.Context, request applicationrepository.AccessRequest) (applicationrepository.RepositoryAccess, error) {
+	if service.err != nil {
+		return applicationrepository.RepositoryAccess{}, service.err
+	}
+	return applicationrepository.RepositoryAccess{Owner: request.Owner, Name: request.Name, Collaborators: []applicationrepository.Collaborator{{Username: "bob", Permission: applicationrepository.PermissionWrite}}}, nil
+}
+
 func (service *repositoryService) List(_ context.Context, request applicationrepository.ListRequest) ([]applicationrepository.Repository, error) {
 	service.request = request
 	return service.result, service.err
@@ -276,5 +283,19 @@ func TestRepositoryArchiveCommandRejectsInvalidTarget(t *testing.T) {
 	command.SetArgs([]string{"repo", "archive", "bad"})
 	if err := command.Execute(); err == nil {
 		t.Fatal("invalid target accepted")
+	}
+}
+
+func TestRepositoryAccessCommandPrintsCollaborators(t *testing.T) {
+	var output bytes.Buffer
+	command := NewRootCommandWithRepositoryService(&repositoryService{})
+	command.SetOut(&output)
+	command.SetArgs([]string{"repo", "access", "alice/project"})
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	want := "Repository: alice/project\nCollaborators:\n- bob: write\n"
+	if output.String() != want {
+		t.Fatalf("output = %q, want %q", output.String(), want)
 	}
 }

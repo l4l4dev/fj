@@ -63,6 +63,32 @@ type Archiver interface {
 	SetArchived(context.Context, ArchiveRequest) (Repository, error)
 }
 
+type Permission string
+
+const (
+	PermissionRead  Permission = "read"
+	PermissionWrite Permission = "write"
+	PermissionAdmin Permission = "admin"
+)
+
+type Collaborator struct {
+	Username   string
+	Permission Permission
+}
+type RepositoryAccess struct {
+	Owner         string
+	Name          string
+	Collaborators []Collaborator
+}
+type AccessRequest struct {
+	Owner string
+	Name  string
+}
+
+type AccessViewer interface {
+	ViewAccess(context.Context, AccessRequest) (RepositoryAccess, error)
+}
+
 type RemoteError struct {
 	operation  string
 	statusCode int
