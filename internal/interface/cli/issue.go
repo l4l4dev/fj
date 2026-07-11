@@ -9,12 +9,54 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.Inspector, creator applicationissue.Creator, updater applicationissue.Updater) *cobra.Command {
+func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.Inspector, creator applicationissue.Creator, updater applicationissue.Updater, stateChanger applicationissue.StateChanger) *cobra.Command {
 	command := &cobra.Command{Use: "issue", Short: "Manage issues"}
 	command.AddCommand(newIssueListCommand(lister))
 	command.AddCommand(newIssueInspectCommand(inspector))
 	command.AddCommand(newIssueCreateCommand(creator))
 	command.AddCommand(newIssueUpdateCommand(updater))
+	command.AddCommand(newIssueStateCommand(stateChanger))
+	return command
+}
+
+func newIssueStateCommand(changer applicationissue.StateChanger) *cobra.Command {
+	var instance, state string
+	command := &cobra.Command{Use: "state OWNER/NAME NUMBER", Short: "Change issue state", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 2 {
+			return newCommandError(categoryValidation, "change issue state", fmt.Errorf("OWNER/NAME and issue number are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "change issue state", err)
+		}
+		number, err := strconv.Atoi(args[1])
+		if err != nil || number < 1 {
+			return newCommandError(categoryValidation, "change issue state", fmt.Errorf("issue number must be a positive integer"))
+		}
+		if state != string(applicationissue.StateOpen) && state != string(applicationissue.StateClosed) {
+			return newCommandError(categoryValidation, "change issue state", fmt.Errorf("state must be open or closed"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if changer == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			changer = dependencies.IssueStateChanger
+			if changer == nil {
+				return newCommandError(categoryInternal, "change issue state", fmt.Errorf("issue state changer unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		result, err := applicationissue.NewChangeStateUseCase(changer).Execute(command.Context(), applicationissue.ChangeStateRequest{Owner: parts[0], Name: parts[1], Number: number, State: applicationissue.State(state)})
+		if err != nil {
+			return mapApplicationError(err, "change issue state")
+		}
+		return (issuePresenter{}).PresentState(command.OutOrStdout(), result)
+	}}
+	command.Flags().StringVar(&state, "state", "", "issue state (open or closed)")
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 

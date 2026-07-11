@@ -95,3 +95,14 @@ func TestRESTAdapterUpdateSendsOnlySpecifiedFields(t *testing.T) {
 		t.Fatalf("unexpected empty body update: %s err=%v", transport.body, err)
 	}
 }
+
+func TestRESTAdapterChangeState(t *testing.T) {
+	transport := &jsonStubTransport{}
+	_, err := NewRESTAdapter(transport).ChangeState(context.Background(), applicationissue.ChangeStateRequest{Owner: "alice", Name: "project", Number: 12, State: applicationissue.StateClosed})
+	if err != nil || transport.method != http.MethodPatch || transport.path != "/api/v1/repos/alice/project/issues/12" {
+		t.Fatalf("unexpected state request: method=%s path=%s err=%v", transport.method, transport.path, err)
+	}
+	if string(transport.body) != `{"state":"closed"}` {
+		t.Fatalf("unexpected state body: %s", transport.body)
+	}
+}

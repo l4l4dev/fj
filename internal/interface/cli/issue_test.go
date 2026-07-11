@@ -85,6 +85,19 @@ func TestIssueUpdateOutputAndEmptyBody(t *testing.T) {
 	}
 }
 
+func TestIssueStateOutput(t *testing.T) {
+	command := newIssueStateCommand(stateChangerStubForCLI{detail: applicationissue.IssueDetail{Number: 12, State: applicationissue.StateClosed}})
+	command.SetArgs([]string{"alice/project", "12", "--state", "closed"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if want := "Issue: #12\nState: closed\n"; output.String() != want {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+}
+
 type inspectorStubForCLI struct{ detail applicationissue.IssueDetail }
 
 func (stub inspectorStubForCLI) Inspect(context.Context, applicationissue.InspectRequest) (applicationissue.IssueDetail, error) {
@@ -100,5 +113,11 @@ func (stub creatorStubForCLI) Create(context.Context, applicationissue.CreateReq
 type updaterStubForCLI struct{ detail applicationissue.IssueDetail }
 
 func (stub updaterStubForCLI) Update(context.Context, applicationissue.UpdateRequest) (applicationissue.IssueDetail, error) {
+	return stub.detail, nil
+}
+
+type stateChangerStubForCLI struct{ detail applicationissue.IssueDetail }
+
+func (stub stateChangerStubForCLI) ChangeState(context.Context, applicationissue.ChangeStateRequest) (applicationissue.IssueDetail, error) {
 	return stub.detail, nil
 }

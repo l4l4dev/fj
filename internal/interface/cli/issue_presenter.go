@@ -10,6 +10,11 @@ import (
 
 type issuePresenter struct{}
 
+func (issuePresenter) PresentState(w io.Writer, detail applicationissue.IssueDetail) error {
+	_, err := fmt.Fprintf(w, "Issue: #%d\nState: %s\n", detail.Number, detail.State)
+	return err
+}
+
 func (issuePresenter) PresentUpdated(w io.Writer, detail applicationissue.IssueDetail, fields []string) error {
 	body := detail.Body
 	if body == "" {

@@ -85,6 +85,17 @@ type Updater interface {
 	Update(context.Context, UpdateRequest) (IssueDetail, error)
 }
 
+type ChangeStateRequest struct {
+	Owner  string
+	Name   string
+	Number int
+	State  State
+}
+
+type StateChanger interface {
+	ChangeState(context.Context, ChangeStateRequest) (IssueDetail, error)
+}
+
 type ListUseCase struct{ lister Lister }
 
 func NewListUseCase(lister Lister) ListUseCase { return ListUseCase{lister: lister} }

@@ -109,6 +109,34 @@ func (adapter *RESTAdapter) Update(ctx context.Context, request applicationissue
 	return applicationissue.IssueDetail{Number: decoded.Number, Title: decoded.Title, State: state, Body: decoded.Body}, nil
 }
 
+func (adapter *RESTAdapter) ChangeState(ctx context.Context, request applicationissue.ChangeStateRequest) (applicationissue.IssueDetail, error) {
+	jsonClient, ok := adapter.transport.(jsonTransport)
+	if !ok {
+		return applicationissue.IssueDetail{}, apperror.New(apperror.Remote, "change issue state", "")
+	}
+	body, err := json.Marshal(struct {
+		State applicationissue.State `json:"state"`
+	}{State: request.State})
+	if err != nil {
+		return applicationissue.IssueDetail{}, apperror.New(apperror.Remote, "change issue state", "")
+	}
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues/" + strconv.Itoa(request.Number)
+	response, err := jsonClient.DoJSON(ctx, http.MethodPatch, path, nil, body)
+	if err != nil {
+		return applicationissue.IssueDetail{}, translateStateError(err)
+	}
+	defer response.Body.Close()
+	var decoded forgejoIssue
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationissue.IssueDetail{}, apperror.New(apperror.Remote, "change issue state", "")
+	}
+	state := applicationissue.StateClosed
+	if decoded.State == string(applicationissue.StateOpen) {
+		state = applicationissue.StateOpen
+	}
+	return applicationissue.IssueDetail{Number: decoded.Number, Title: decoded.Title, State: state, Body: decoded.Body}, nil
+}
+
 func NewRESTAdapter(transport transport) *RESTAdapter { return &RESTAdapter{transport: transport} }
 
 func (adapter *RESTAdapter) List(ctx context.Context, request applicationissue.ListRequest) (applicationissue.Page, error) {
@@ -217,7 +245,28 @@ func translateUpdateError(err error) error {
 	return apperror.New(apperror.Remote, "update issue", "")
 }
 
+func translateStateError(err error) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		category := apperror.Remote
+		message := ""
+		switch status.StatusCode() {
+		case 401, 403:
+			category = apperror.Authentication
+		case 404:
+			category = apperror.NotFound
+			message = "issue not found"
+		case 409:
+			category = apperror.Conflict
+			message = "issue state conflict"
+		}
+		return apperror.New(category, "change issue state", message)
+	}
+	return apperror.New(apperror.Remote, "change issue state", "")
+}
+
 var _ applicationissue.Lister = (*RESTAdapter)(nil)
 var _ applicationissue.Inspector = (*RESTAdapter)(nil)
 var _ applicationissue.Creator = (*RESTAdapter)(nil)
 var _ applicationissue.Updater = (*RESTAdapter)(nil)
+var _ applicationissue.StateChanger = (*RESTAdapter)(nil)
