@@ -7,11 +7,13 @@ import (
 	"github.com/l4l4dev/fj/internal/application/apperror"
 	applicationauth "github.com/l4l4dev/fj/internal/application/auth"
 	applicationissue "github.com/l4l4dev/fj/internal/application/issue"
+	applicationpullrequest "github.com/l4l4dev/fj/internal/application/pullrequest"
 	applicationrepository "github.com/l4l4dev/fj/internal/application/repository"
 	infrastructureauth "github.com/l4l4dev/fj/internal/infrastructure/auth"
 	infrastructureconfig "github.com/l4l4dev/fj/internal/infrastructure/config"
 	"github.com/l4l4dev/fj/internal/infrastructure/forgejo"
 	infrastructureissue "github.com/l4l4dev/fj/internal/infrastructure/issue"
+	infrastructurerpullrequest "github.com/l4l4dev/fj/internal/infrastructure/pullrequest"
 	infrastructurerepository "github.com/l4l4dev/fj/internal/infrastructure/repository"
 	"github.com/spf13/cobra"
 )
@@ -38,12 +40,14 @@ type RepositoryDependencies struct {
 	MilestoneClearer  applicationissue.MilestoneClearer
 	Assigner          applicationissue.Assigner
 	Unassigner        applicationissue.Unassigner
+	PullRequests      applicationpullrequest.PullRequestLister
 }
 
 func NewRootCommandWithDependencies(dependencies RepositoryDependencies) *cobra.Command {
 	command := &cobra.Command{Use: "fj", Short: "AI-first CLI for Forgejo", Args: cobra.NoArgs, SilenceErrors: true, SilenceUsage: true, RunE: func(command *cobra.Command, _ []string) error { return command.Help() }}
 	command.AddCommand(newRepositoryCommand(dependencies))
 	command.AddCommand(newIssueCommand(dependencies.Issues, dependencies.IssueInspector, dependencies.IssueCreator, dependencies.IssueUpdater, dependencies.IssueStateChanger, dependencies.CommentViewer, dependencies.CommentCreator, dependencies.LabelAdder, dependencies.LabelRemover, dependencies.MilestoneSetter, dependencies.MilestoneClearer, dependencies.Assigner, dependencies.Unassigner))
+	command.AddCommand(newPullRequestCommand(dependencies.PullRequests))
 	command.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return newCommandError(categoryValidation, "execute command", err)
 	})
@@ -89,7 +93,8 @@ func composeRepositoryDependencies(ctx context.Context, instanceName string) (Re
 	}
 	adapter := infrastructurerepository.NewRESTAdapter(forgejo.NewClient(instance, credential, "dev", nil))
 	issueAdapter := infrastructureissue.NewRESTAdapter(forgejo.NewClient(instance, credential, "dev", nil))
-	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter, Issues: issueAdapter, IssueInspector: issueAdapter, IssueCreator: issueAdapter, IssueUpdater: issueAdapter, IssueStateChanger: issueAdapter, CommentViewer: issueAdapter, CommentCreator: issueAdapter, LabelAdder: issueAdapter, LabelRemover: issueAdapter, MilestoneSetter: issueAdapter, MilestoneClearer: issueAdapter, Assigner: issueAdapter, Unassigner: issueAdapter}, nil
+	pullRequestAdapter := infrastructurerpullrequest.NewRESTAdapter(forgejo.NewClient(instance, credential, "dev", nil))
+	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter, Issues: issueAdapter, IssueInspector: issueAdapter, IssueCreator: issueAdapter, IssueUpdater: issueAdapter, IssueStateChanger: issueAdapter, CommentViewer: issueAdapter, CommentCreator: issueAdapter, LabelAdder: issueAdapter, LabelRemover: issueAdapter, MilestoneSetter: issueAdapter, MilestoneClearer: issueAdapter, Assigner: issueAdapter, Unassigner: issueAdapter, PullRequests: pullRequestAdapter}, nil
 }
 
 func mapApplicationError(err error, operation string) error {
