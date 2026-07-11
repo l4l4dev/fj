@@ -276,6 +276,30 @@ A task may be marked Done only when all of the following are true:
 - Status updated to Done
 - No unapproved scope remains
 
+## Task Lifecycle Workflow
+
+After implementation, agents follow this workflow for the current task only:
+
+```text
+Verification → Independent Review → Review Ready → Finalization → Task Commit → Push Confirmation
+```
+
+- When Independent Review is `Review Ready`, meaning no unresolved Critical or
+  Major finding and no missing human decision remains, proceed automatically to
+  Backlog Finalization for the same task.
+- Critical or Major findings require an immediate stop and human decision.
+- Minor findings require a proposed fix or deferral and the human's adopt,
+  defer, or reject decision before any follow-up change.
+- Suggestions are recorded as future improvement candidates and do not block
+  Finalization unless a human decision is still required.
+- A commit must contain changes for one task only. Never mix unrelated changes
+  into a task commit; inspect the staged file list and cached diff first.
+- Before push, confirm the commit hash, commit scope, task status, and that no
+  unrelated changes are included.
+- Commit and push remain explicitly authorized operations under Section 10.
+- Destructive operations, including history rewriting, force-push, deletion, or
+  privacy cleanup, require separate human approval and an approved task.
+
 ## 18. Autonomous Workflow Enforcement
 
 - An agent must not implement a task unless its dependencies are complete and its approved Decision is recorded in Backlog.
