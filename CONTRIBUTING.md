@@ -12,6 +12,11 @@ documents define the project's principles, architectural boundaries, direction,
 and working rules. If they conflict with a task or implementation, stop and
 raise the conflict for human resolution.
 
+Follow [DEVELOPMENT_WORKFLOW.md](DEVELOPMENT_WORKFLOW.md) for the shared
+human and AI workflow from task selection through Backlog finalization. In
+particular, obtain required Decision approval before implementation and verify
+all Acceptance Criteria before marking a task Done.
+
 Use the existing Backlog task for the change. Keep work within its approved
 scope and acceptance criteria. Do not combine unrelated cleanup, refactoring,
 or feature work with the contribution. A scope expansion or a change requiring

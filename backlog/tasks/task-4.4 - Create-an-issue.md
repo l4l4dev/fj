@@ -2,9 +2,10 @@
 id: TASK-4.4
 title: Create an issue
 status: Done
-assignee: []
+assignee:
+  - '@codex'
 created_date: '2026-07-10 11:55'
-updated_date: '2026-07-11 02:20'
+updated_date: '2026-07-11 05:43'
 labels: []
 dependencies:
   - TASK-2.9
@@ -24,15 +25,15 @@ Intended scope: approximately 30-90 minutes.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The target repository and submitted fields are observable
-- [ ] #2 Invalid metadata is rejected before submission
-- [ ] #3 The CLI provides fj issue create OWNER/NAME with required --title, optional --body, and --instance; assignee, label, milestone, and state flags are not accepted.
-- [ ] #4 Application owns CreateRequest and Creator in internal/application/issue; Create returns IssueDetail and existing Repository ports are unchanged.
-- [ ] #5 The Use Case validates owner, name, and title, rejects whitespace-only title, and permits an empty body.
-- [ ] #6 Infrastructure sends POST /api/v1/repos/{owner}/{repo}/issues with title and body JSON fields only, safely encodes path segments, and converts the response to IssueDetail.
-- [ ] #7 The operation name is create issue; failures use the existing apperror boundary without exposing credentials, URL details, response bodies, or raw transport causes.
-- [ ] #8 Successful creation reuses the Inspect Presenter format, displays `-` for an empty Body, and emits no create-specific success message.
-- [ ] #9 Assignee, labels, milestone, state, confirmation, interactive mode, and JSON output remain out of scope.
+- [x] #1 The target repository and submitted fields are observable
+- [x] #2 Invalid metadata is rejected before submission
+- [x] #3 The CLI provides fj issue create OWNER/NAME with required --title, optional --body, and --instance; assignee, label, milestone, and state flags are not accepted.
+- [x] #4 Application owns CreateRequest and Creator in internal/application/issue; Create returns IssueDetail and existing Repository ports are unchanged.
+- [x] #5 The Use Case validates owner, name, and title, rejects whitespace-only title, and permits an empty body.
+- [x] #6 Infrastructure sends POST /api/v1/repos/{owner}/{repo}/issues with title and body JSON fields only, safely encodes path segments, and converts the response to IssueDetail.
+- [x] #7 The operation name is create issue; failures use the existing apperror boundary without exposing credentials, URL details, response bodies, or raw transport causes.
+- [x] #8 Successful creation reuses the Inspect Presenter format, displays `-` for an empty Body, and emits no create-specific success message.
+- [x] #9 Assignee, labels, milestone, state, confirmation, interactive mode, and JSON output remain out of scope.
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -47,6 +48,15 @@ Approved design:
 - Out of scope: assignee, labels, milestone, state, confirmation, interactive mode, and JSON.
 
 Independent Review: Critical: none. Major: none. Minor: HTTP error boundary test expansion, JSON decode failure test expansion, path encoding test expansion, empty-body JSON submission verification, secret/raw cause redaction test expansion, and Composition Root Creator injection test expansion remain possible. Suggestion: reconsider the jsonTransport type assertion when the shared transport boundary is revisited; consider adding a CLI-to-Creator delegation test.
+
+Verification:
+- gofmt -l .
+- git diff --check
+- go vet ./...
+- go test ./...
+- make pre-commit
+
+All listed verification commands succeeded.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

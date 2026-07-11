@@ -2,9 +2,10 @@
 id: TASK-4.3
 title: Inspect an issue
 status: Done
-assignee: []
+assignee:
+  - '@codex'
 created_date: '2026-07-10 11:55'
-updated_date: '2026-07-11 02:11'
+updated_date: '2026-07-11 05:43'
 labels: []
 dependencies:
   - TASK-2.9
@@ -24,14 +25,14 @@ Intended scope: approximately 30-90 minutes.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Repository and issue identity are explicit
-- [ ] #2 Missing and inaccessible issues produce distinct errors
-- [ ] #3 The CLI provides fj issue inspect OWNER/NAME NUMBER and accepts only a positive integer issue number.
-- [ ] #4 Application owns IssueDetail with Number, Title, State, and Body, plus InspectRequest and an Inspector interface in internal/application/issue; existing issue list and repository ports remain unchanged.
-- [ ] #5 Infrastructure calls GET /api/v1/repos/{owner}/{repo}/issues/{index}, safely encodes path segments, and converts the private DTO to IssueDetail.
-- [ ] #6 The operation name is inspect issue and failures use the existing Application error boundary without exposing HTTP status, credentials, URL details, response bodies, or raw causes to the CLI.
-- [ ] #7 The Presenter adds only issue inspect output; existing issue list output remains byte-compatible.
-- [ ] #8 Author, timestamps, labels, assignee, milestone, comments, repository metadata, JSON output, and markdown rendering are out of scope.
+- [x] #1 Repository and issue identity are explicit
+- [x] #2 Missing and inaccessible issues produce distinct errors
+- [x] #3 The CLI provides fj issue inspect OWNER/NAME NUMBER and accepts only a positive integer issue number.
+- [x] #4 Application owns IssueDetail with Number, Title, State, and Body, plus InspectRequest and an Inspector interface in internal/application/issue; existing issue list and repository ports remain unchanged.
+- [x] #5 Infrastructure calls GET /api/v1/repos/{owner}/{repo}/issues/{index}, safely encodes path segments, and converts the private DTO to IssueDetail.
+- [x] #6 The operation name is inspect issue and failures use the existing Application error boundary without exposing HTTP status, credentials, URL details, response bodies, or raw causes to the CLI.
+- [x] #7 The Presenter adds only issue inspect output; existing issue list output remains byte-compatible.
+- [x] #8 Author, timestamps, labels, assignee, milestone, comments, repository metadata, JSON output, and markdown rendering are out of scope.
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -48,6 +49,15 @@ Approved design:
 - Author, timestamps, labels, assignee, milestone, comments, repository metadata, JSON output, and markdown rendering are out of scope.
 
 Independent Review: Critical: none. Major: none. Minor: Infrastructure error boundary test expansion, path encoding test expansion, empty-body Presenter test expansion, and Composition Root injection test expansion remain possible. Suggestion: organize Presenter responsibilities before future markdown rendering and consider adding secret-redaction boundary tests.
+
+Verification:
+- gofmt -l .
+- git diff --check
+- go vet ./...
+- go test ./...
+- make pre-commit
+
+All listed verification commands succeeded.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

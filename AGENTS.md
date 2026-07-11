@@ -228,6 +228,39 @@ Before stopping, report:
 
 Do not commit or push; wait for human confirmation, per Section 10.
 
+## 17. Backlog Task Lifecycle
+
+AI agents must follow this lifecycle for every implementation task:
+
+```text
+To Do → Decision approved → In Progress → Review → Done
+```
+
+- Human approval of the implementation Decision is required before implementation starts.
+- Every Acceptance Criterion must be checked (`[x]`) before a task is changed to Done.
+- Status and Acceptance Criteria must describe the same completion state.
+
+### Ownership
+
+- Assignee is optional while a task is To Do or Decision approved.
+- An Assignee is required when implementation starts.
+- The Assignee records the implementation owner or implementation agent.
+
+### Completion Checklist
+
+A task may be marked Done only when all of the following are true:
+
+- Implementation completed
+- Tests passed
+- Required verification passed
+- Independent review completed
+- Review summary recorded
+- All Acceptance Criteria checked
+- Implementation Notes updated
+- Final Summary recorded
+- Status updated to Done
+- No unapproved scope remains
+
 <!-- BACKLOG.MD GUIDELINES START -->
 <CRITICAL_INSTRUCTION>
 

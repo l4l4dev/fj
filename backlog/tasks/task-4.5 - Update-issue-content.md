@@ -2,9 +2,10 @@
 id: TASK-4.5
 title: Update issue content
 status: Done
-assignee: []
+assignee:
+  - '@codex'
 created_date: '2026-07-10 11:55'
-updated_date: '2026-07-11 05:21'
+updated_date: '2026-07-11 05:43'
 labels: []
 dependencies:
   - TASK-2.9
@@ -24,15 +25,15 @@ Intended scope: approximately 30-90 minutes.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Only explicitly supplied fields are updated
-- [ ] #2 The result identifies all changed fields
-- [ ] #3 The CLI provides fj issue update OWNER/NAME NUMBER with --instance and optional --title/--body flags; issue number is a positive integer and at least one update flag is required.
-- [ ] #4 Application owns UpdateRequest and Updater in internal/application/issue; nil means unspecified and pointer-to-empty means explicit empty update; Repository ports remain unchanged.
-- [ ] #5 Only title and body are updated; state, assignee, labels, milestone, comments, metadata, and JSON remain out of scope.
-- [ ] #6 Infrastructure calls PATCH /api/v1/repos/{owner}/{repo}/issues/{index}, sends only specified title/body fields, safely encodes path segments, and converts the DTO to IssueDetail.
-- [ ] #7 The operation name is update issue; validation, authentication, remote, and internal failures use the existing apperror boundary without HTTP status classification in CLI.
-- [ ] #8 Update output lists Changed fields in fixed title, body order and preserves existing list, filter, inspect, and create output byte compatibility.
-- [ ] #9 The implementation preserves Interface → Application Port → Infrastructure adapter direction, explicit dependency injection, and adds no runtime type assertions.
+- [x] #1 Only explicitly supplied fields are updated
+- [x] #2 The result identifies all changed fields
+- [x] #3 The CLI provides fj issue update OWNER/NAME NUMBER with --instance and optional --title/--body flags; issue number is a positive integer and at least one update flag is required.
+- [x] #4 Application owns UpdateRequest and Updater in internal/application/issue; nil means unspecified and pointer-to-empty means explicit empty update; Repository ports remain unchanged.
+- [x] #5 Only title and body are updated; state, assignee, labels, milestone, comments, metadata, and JSON remain out of scope.
+- [x] #6 Infrastructure calls PATCH /api/v1/repos/{owner}/{repo}/issues/{index}, sends only specified title/body fields, safely encodes path segments, and converts the DTO to IssueDetail.
+- [x] #7 The operation name is update issue; validation, authentication, remote, and internal failures use the existing apperror boundary without HTTP status classification in CLI.
+- [x] #8 Update output lists Changed fields in fixed title, body order and preserves existing list, filter, inspect, and create output byte compatibility.
+- [x] #9 The implementation preserves Interface → Application Port → Infrastructure adapter direction, explicit dependency injection, and adds no runtime type assertions.
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -47,6 +48,15 @@ Approved design:
 - Architecture: preserve Interface → Application Port → Infrastructure adapter, explicit DI, no new runtime type assertions, and no HTTP status classification in CLI.
 
 Independent Review: Critical: none. Major: none. Minor: HTTP error boundary test expansion, JSON decode failure test expansion, path encoding test expansion, title/body combined JSON and Changed fields boundary test expansion, pointer semantics boundary test expansion, secret/raw cause redaction test expansion, Composition Root Updater injection test expansion, and CLI-to-Updater delegation test expansion remain possible. Suggestion: reconsider the jsonTransport type assertion when the shared transport boundary is revisited.
+
+Verification:
+- gofmt -l .
+- git diff --check
+- go vet ./...
+- go test ./...
+- make pre-commit
+
+All listed verification commands succeeded.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
