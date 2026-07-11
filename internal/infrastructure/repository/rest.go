@@ -131,6 +131,37 @@ func (adapter *RESTAdapter) Update(ctx context.Context, request applicationrepos
 	return toApplicationRepository(decoded), nil
 }
 
+func (adapter *RESTAdapter) SetArchived(ctx context.Context, request applicationrepository.ArchiveRequest) (applicationrepository.Repository, error) {
+	transport, ok := adapter.transport.(jsonTransport)
+	if !ok {
+		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("archive repository", 0)
+	}
+	body, err := json.Marshal(struct {
+		Archived bool `json:"archived"`
+	}{Archived: request.Archived})
+	if err != nil {
+		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("archive repository", 0)
+	}
+	response, err := transport.DoJSON(ctx, http.MethodPatch, "/api/v1/repos/"+url.PathEscape(request.Owner)+"/"+url.PathEscape(request.Name), nil, body)
+	if err != nil {
+		op := "archive repository"
+		if !request.Archived {
+			op = "restore repository"
+		}
+		return applicationrepository.Repository{}, translateRemoteError(err, op)
+	}
+	defer response.Body.Close()
+	var decoded forgejoRepository
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		op := "archive repository"
+		if !request.Archived {
+			op = "restore repository"
+		}
+		return applicationrepository.Repository{}, applicationrepository.NewRemoteError(op, 0)
+	}
+	return toApplicationRepository(decoded), nil
+}
+
 func toApplicationRepository(repository forgejoRepository) applicationrepository.Repository {
 	return applicationrepository.Repository{
 		Owner:         repository.Owner.Login,
@@ -157,3 +188,4 @@ var _ applicationrepository.Service = (*RESTAdapter)(nil)
 var _ applicationrepository.Getter = (*RESTAdapter)(nil)
 var _ applicationrepository.Creator = (*RESTAdapter)(nil)
 var _ applicationrepository.Updater = (*RESTAdapter)(nil)
+var _ applicationrepository.Archiver = (*RESTAdapter)(nil)

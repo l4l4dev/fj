@@ -26,6 +26,52 @@ func newRepositoryCommand(service applicationrepository.Service) *cobra.Command 
 		updater = candidate
 	}
 	command.AddCommand(newRepositoryUpdateCommand(updater))
+	var archiver applicationrepository.Archiver
+	if candidate, ok := service.(applicationrepository.Archiver); ok {
+		archiver = candidate
+	}
+	command.AddCommand(newRepositoryArchiveCommand(archiver, true))
+	command.AddCommand(newRepositoryArchiveCommand(archiver, false))
+	return command
+}
+
+func newRepositoryArchiveCommand(archiver applicationrepository.Archiver, archived bool) *cobra.Command {
+	name := "restore"
+	operation := "restore repository"
+	if archived {
+		name = "archive"
+		operation = "archive repository"
+	}
+	var instance string
+	command := &cobra.Command{Use: name + " OWNER/NAME", Short: name + " a repository", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			return newCommandError(categoryValidation, operation, fmt.Errorf("OWNER/NAME is required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, operation, err)
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if archiver == nil {
+			service, err := composeRepositoryService(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			var ok bool
+			archiver, ok = service.(applicationrepository.Archiver)
+			if !ok {
+				return newCommandError(categoryInternal, operation, fmt.Errorf("repository service does not support archive operations"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		result, err := applicationrepository.NewArchiveUseCase(archiver).Execute(command.Context(), applicationrepository.ArchiveRequest{Owner: parts[0], Name: parts[1], Archived: archived})
+		if err != nil {
+			return mapArchiveRepositoryError(err, operation)
+		}
+		fmt.Fprintf(command.OutOrStdout(), "Repository: %s/%s\nArchived: %t\n", result.Owner, result.Name, result.Archived)
+		return nil
+	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 

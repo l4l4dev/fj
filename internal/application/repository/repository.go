@@ -53,6 +53,16 @@ type Updater interface {
 	Update(context.Context, UpdateRequest) (Repository, error)
 }
 
+type ArchiveRequest struct {
+	Owner    string
+	Name     string
+	Archived bool
+}
+
+type Archiver interface {
+	SetArchived(context.Context, ArchiveRequest) (Repository, error)
+}
+
 type RemoteError struct {
 	operation  string
 	statusCode int

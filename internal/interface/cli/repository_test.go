@@ -44,6 +44,13 @@ func (service *repositoryService) Update(_ context.Context, request applicationr
 	return result, nil
 }
 
+func (service *repositoryService) SetArchived(_ context.Context, request applicationrepository.ArchiveRequest) (applicationrepository.Repository, error) {
+	if service.err != nil {
+		return applicationrepository.Repository{}, service.err
+	}
+	return applicationrepository.Repository{Owner: request.Owner, Name: request.Name, Archived: request.Archived}, nil
+}
+
 func (service *repositoryService) List(_ context.Context, request applicationrepository.ListRequest) ([]applicationrepository.Repository, error) {
 	service.request = request
 	return service.result, service.err
@@ -245,5 +252,29 @@ func TestRepositoryUpdateCommandMapsErrors(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), test.want) {
 			t.Fatalf("status %d: %v", test.status, err)
 		}
+	}
+}
+
+func TestRepositoryArchiveAndRestoreCommandsPrintState(t *testing.T) {
+	for _, test := range []struct{ command, state string }{{"archive", "true"}, {"restore", "false"}} {
+		var output bytes.Buffer
+		command := NewRootCommandWithRepositoryService(&repositoryService{})
+		command.SetOut(&output)
+		command.SetArgs([]string{"repo", test.command, "alice/project"})
+		if err := command.Execute(); err != nil {
+			t.Fatal(err)
+		}
+		want := "Repository: alice/project\nArchived: " + test.state + "\n"
+		if output.String() != want {
+			t.Fatalf("output = %q, want %q", output.String(), want)
+		}
+	}
+}
+
+func TestRepositoryArchiveCommandRejectsInvalidTarget(t *testing.T) {
+	command := NewRootCommandWithRepositoryService(&repositoryService{})
+	command.SetArgs([]string{"repo", "archive", "bad"})
+	if err := command.Execute(); err == nil {
+		t.Fatal("invalid target accepted")
 	}
 }

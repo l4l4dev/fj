@@ -123,3 +123,24 @@ func mapUpdateRepositoryError(err error) error {
 	}
 	return newCommandError(categoryInternal, "update repository", err)
 }
+
+func mapArchiveRepositoryError(err error, operation string) error {
+	if err == nil {
+		return nil
+	}
+	var remoteError applicationrepository.RemoteError
+	if errors.As(err, &remoteError) {
+		if remoteError.StatusCode() == 401 || remoteError.StatusCode() == 403 {
+			return newCommandError(categoryAuthentication, operation, err)
+		}
+		if remoteError.StatusCode() == 404 {
+			return newCommandErrorWithMessage(categoryRemote, operation, "repository not found", err)
+		}
+		return newCommandError(categoryRemote, operation, err)
+	}
+	var validationError applicationrepository.ValidationError
+	if errors.As(err, &validationError) {
+		return newCommandError(categoryValidation, operation, err)
+	}
+	return newCommandError(categoryInternal, operation, err)
+}
