@@ -1,10 +1,10 @@
 ---
 id: TASK-3.7
 title: Architecture Hardening Before M3
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-11 00:25'
-updated_date: '2026-07-11 00:31'
+updated_date: '2026-07-11 01:34'
 labels: []
 dependencies:
   - TASK-3.1
@@ -54,12 +54,12 @@ Harden the architecture identified during the M2 completion review before M3 iss
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 HTTP status classification is owned by the application boundary and the CLI receives safe categories without interpreting transport status codes.
-- [ ] #2 Duplicated command error mapping is consolidated without changing existing public error categories, messages, or exit codes.
-- [ ] #3 Composition Root wiring uses explicit capability dependencies and does not rely on runtime type assertions for repository operations.
-- [ ] #4 Validation failures use one consistent typed representation and preserve existing validation behavior.
-- [ ] #5 A presenter/output boundary is defined or introduced without changing existing human-readable output; future JSON support remains out of scope.
-- [ ] #6 Existing M1/M2 CLI contracts, credential safety, and repository operation behavior remain compatible and are covered by focused regression tests.
+- [x] #1 HTTP status classification is owned by the application boundary and the CLI receives safe categories without interpreting transport status codes.
+- [x] #2 Duplicated command error mapping is consolidated without changing existing public error categories, messages, or exit codes.
+- [x] #3 Composition Root wiring uses explicit capability dependencies and does not rely on runtime type assertions for repository operations.
+- [x] #4 Validation failures use one consistent typed representation and preserve existing validation behavior.
+- [x] #5 A presenter/output boundary is defined or introduced without changing existing human-readable output; future JSON support remains out of scope.
+- [x] #6 Existing M1/M2 CLI contracts, credential safety, and repository operation behavior remain compatible and are covered by focused regression tests.
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -75,3 +75,9 @@ Created as M3 preparation work following the M2 completion review. Required hard
 
 Split into three implementation children before M3: TASK-3.7.1 Application Error Boundary Refactoring, TASK-3.7.2 Explicit Composition Root Refactoring (depends on 3.7.1), and TASK-3.7.3 Presenter Boundary Introduction (depends on 3.7.2). The parent remains the M3 preparation hardening gate; all children are intentionally To Do.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+M3 preparation Architecture Hardening is complete. Application Error Boundary Refactoring completed with semantic application errors, consolidated CLI mapping, and unified validation. Explicit Composition Root Refactoring completed with RepositoryDependencies and explicit capability injection while retaining the migration wrapper. Presenter Boundary Introduction completed by moving repository human-readable output into internal/interface/cli without changing output compatibility. M3 may begin after the established hardening contracts are used by subsequent workflows.
+<!-- SECTION:FINAL_SUMMARY:END -->
