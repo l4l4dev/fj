@@ -149,6 +149,32 @@ type LabelRemover interface {
 	RemoveLabel(context.Context, RemoveLabelRequest) (Label, error)
 }
 
+type Milestone struct {
+	ID    int64
+	Title string
+}
+
+type SetMilestoneRequest struct {
+	Owner     string
+	Name      string
+	Number    int
+	Milestone string
+}
+
+type ClearMilestoneRequest struct {
+	Owner  string
+	Name   string
+	Number int
+}
+
+type MilestoneSetter interface {
+	SetMilestone(context.Context, SetMilestoneRequest) (Milestone, error)
+}
+
+type MilestoneClearer interface {
+	ClearMilestone(context.Context, ClearMilestoneRequest) error
+}
+
 type ListUseCase struct{ lister Lister }
 
 func NewListUseCase(lister Lister) ListUseCase { return ListUseCase{lister: lister} }

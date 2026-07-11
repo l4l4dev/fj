@@ -10,6 +10,16 @@ import (
 
 type issuePresenter struct{}
 
+func (issuePresenter) PresentMilestoneSet(w io.Writer, number int, milestone applicationissue.Milestone) error {
+	_, err := fmt.Fprintf(w, "Issue: #%d\nMilestone set: %s\n", number, milestone.Title)
+	return err
+}
+
+func (issuePresenter) PresentMilestoneCleared(w io.Writer, number int) error {
+	_, err := fmt.Fprintf(w, "Issue: #%d\nMilestone cleared\n", number)
+	return err
+}
+
 func (issuePresenter) PresentLabelAdded(w io.Writer, number int, label applicationissue.Label) error {
 	_, err := fmt.Fprintf(w, "Issue: #%d\nLabel added: %s\n", number, label.Name)
 	return err

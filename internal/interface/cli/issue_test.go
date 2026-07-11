@@ -144,6 +144,29 @@ func TestIssueLabelOutputs(t *testing.T) {
 	}
 }
 
+func TestIssueMilestoneOutputs(t *testing.T) {
+	set := newIssueMilestoneSetCommand(milestoneSetterStubForCLI{milestone: applicationissue.Milestone{ID: 7, Title: "v1"}})
+	set.SetArgs([]string{"alice/project", "12", "v1"})
+	var setOutput strings.Builder
+	set.SetOut(&setOutput)
+	if err := set.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if want := "Issue: #12\nMilestone set: v1\n"; setOutput.String() != want {
+		t.Fatalf("unexpected set output: %q", setOutput.String())
+	}
+	clear := newIssueMilestoneClearCommand(milestoneClearerStubForCLI{})
+	clear.SetArgs([]string{"alice/project", "12"})
+	var clearOutput strings.Builder
+	clear.SetOut(&clearOutput)
+	if err := clear.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if want := "Issue: #12\nMilestone cleared\n"; clearOutput.String() != want {
+		t.Fatalf("unexpected clear output: %q", clearOutput.String())
+	}
+}
+
 type commentViewerStubForCLI struct{ comments []applicationissue.Comment }
 
 func (stub commentViewerStubForCLI) ListComments(context.Context, applicationissue.ListCommentsRequest) ([]applicationissue.Comment, error) {
@@ -166,6 +189,18 @@ type labelRemoverStubForCLI struct{ label applicationissue.Label }
 
 func (stub labelRemoverStubForCLI) RemoveLabel(context.Context, applicationissue.RemoveLabelRequest) (applicationissue.Label, error) {
 	return stub.label, nil
+}
+
+type milestoneSetterStubForCLI struct{ milestone applicationissue.Milestone }
+
+func (stub milestoneSetterStubForCLI) SetMilestone(context.Context, applicationissue.SetMilestoneRequest) (applicationissue.Milestone, error) {
+	return stub.milestone, nil
+}
+
+type milestoneClearerStubForCLI struct{}
+
+func (milestoneClearerStubForCLI) ClearMilestone(context.Context, applicationissue.ClearMilestoneRequest) error {
+	return nil
 }
 
 type inspectorStubForCLI struct{ detail applicationissue.IssueDetail }

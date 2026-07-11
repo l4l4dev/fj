@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -37,6 +38,16 @@ type forgejoComment struct {
 type forgejoLabel struct {
 	ID   int64  `json:"id"`
 	Name string `json:"name"`
+}
+
+type forgejoMilestone struct {
+	ID    int64  `json:"id"`
+	Title string `json:"title"`
+}
+
+type forgejoIssueMilestone struct {
+	Number    int64             `json:"number"`
+	Milestone *forgejoMilestone `json:"milestone"`
 }
 
 func (adapter *RESTAdapter) Inspect(ctx context.Context, request applicationissue.InspectRequest) (applicationissue.IssueDetail, error) {
@@ -251,6 +262,112 @@ func (adapter *RESTAdapter) RemoveLabel(ctx context.Context, request application
 	return target, nil
 }
 
+func (adapter *RESTAdapter) SetMilestone(ctx context.Context, request applicationissue.SetMilestoneRequest) (applicationissue.Milestone, error) {
+	milestones, err := adapter.resolveMilestones(ctx, request.Owner, request.Name)
+	if err != nil {
+		return applicationissue.Milestone{}, err
+	}
+	var target applicationissue.Milestone
+	for _, milestone := range milestones {
+		if milestone.Title == request.Milestone {
+			target = milestone
+			break
+		}
+	}
+	if target.Title == "" {
+		return applicationissue.Milestone{}, apperror.New(apperror.Remote, "resolve milestone", "milestone not found")
+	}
+	current, err := adapter.currentIssueMilestone(ctx, request.Owner, request.Name, request.Number)
+	if err != nil {
+		return applicationissue.Milestone{}, err
+	}
+	if current != nil && current.ID == target.ID {
+		return target, nil
+	}
+	jsonClient, ok := adapter.transport.(jsonTransport)
+	if !ok {
+		return applicationissue.Milestone{}, apperror.New(apperror.Remote, "set issue milestone", "")
+	}
+	body, err := json.Marshal(struct {
+		Milestone int64 `json:"milestone"`
+	}{Milestone: target.ID})
+	if err != nil {
+		return applicationissue.Milestone{}, apperror.New(apperror.Remote, "set issue milestone", "")
+	}
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues/" + strconv.Itoa(request.Number)
+	response, err := jsonClient.DoJSON(ctx, http.MethodPatch, path, nil, body)
+	if err != nil {
+		return applicationissue.Milestone{}, translateMilestoneError(err, "set issue milestone")
+	}
+	defer response.Body.Close()
+	var decoded forgejoIssueMilestone
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil || decoded.Milestone == nil {
+		return applicationissue.Milestone{}, apperror.New(apperror.Remote, "set issue milestone", "")
+	}
+	return applicationissue.Milestone{ID: decoded.Milestone.ID, Title: decoded.Milestone.Title}, nil
+}
+
+func (adapter *RESTAdapter) ClearMilestone(ctx context.Context, request applicationissue.ClearMilestoneRequest) error {
+	current, err := adapter.currentIssueMilestone(ctx, request.Owner, request.Name, request.Number)
+	if err != nil {
+		return err
+	}
+	if current == nil {
+		return nil
+	}
+	jsonClient, ok := adapter.transport.(jsonTransport)
+	if !ok {
+		return apperror.New(apperror.Remote, "clear issue milestone", "")
+	}
+	body := []byte(`{"milestone":null}`)
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues/" + strconv.Itoa(request.Number)
+	response, err := jsonClient.DoJSON(ctx, http.MethodPatch, path, nil, body)
+	if err != nil {
+		return translateMilestoneError(err, "clear issue milestone")
+	}
+	defer response.Body.Close()
+	var decoded forgejoIssueMilestone
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil && err != io.EOF {
+		return apperror.New(apperror.Remote, "clear issue milestone", "")
+	}
+	return nil
+}
+
+func (adapter *RESTAdapter) resolveMilestones(ctx context.Context, owner, name string) ([]applicationissue.Milestone, error) {
+	path := "/api/v1/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(name) + "/milestones"
+	response, err := adapter.transport.Do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, translateMilestoneError(err, "resolve milestone")
+	}
+	defer response.Body.Close()
+	var decoded []forgejoMilestone
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return nil, apperror.New(apperror.Remote, "resolve milestone", "")
+	}
+	result := make([]applicationissue.Milestone, 0, len(decoded))
+	for _, milestone := range decoded {
+		result = append(result, applicationissue.Milestone{ID: milestone.ID, Title: milestone.Title})
+	}
+	return result, nil
+}
+
+func (adapter *RESTAdapter) currentIssueMilestone(ctx context.Context, owner, name string, number int) (*applicationissue.Milestone, error) {
+	path := "/api/v1/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(name) + "/issues/" + strconv.Itoa(number)
+	response, err := adapter.transport.Do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, translateMilestoneError(err, "get issue milestone")
+	}
+	defer response.Body.Close()
+	var decoded forgejoIssueMilestone
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return nil, apperror.New(apperror.Remote, "get issue milestone", "")
+	}
+	if decoded.Milestone == nil {
+		return nil, nil
+	}
+	return &applicationissue.Milestone{ID: decoded.Milestone.ID, Title: decoded.Milestone.Title}, nil
+}
+
 func (adapter *RESTAdapter) issueLabels(ctx context.Context, owner, name string, number int) ([]applicationissue.Label, error) {
 	path := "/api/v1/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(name) + "/issues/" + strconv.Itoa(number) + "/labels"
 	response, err := adapter.transport.Do(ctx, http.MethodGet, path, nil)
@@ -431,6 +548,18 @@ func translateLabelError(err error, operation string) error {
 	return apperror.New(apperror.Remote, operation, "")
 }
 
+func translateMilestoneError(err error, operation string) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		category := apperror.Remote
+		if status.StatusCode() == 401 || status.StatusCode() == 403 {
+			category = apperror.Authentication
+		}
+		return apperror.New(category, operation, "")
+	}
+	return apperror.New(apperror.Remote, operation, "")
+}
+
 var _ applicationissue.Lister = (*RESTAdapter)(nil)
 var _ applicationissue.Inspector = (*RESTAdapter)(nil)
 var _ applicationissue.Creator = (*RESTAdapter)(nil)
@@ -440,3 +569,5 @@ var _ applicationissue.CommentViewer = (*RESTAdapter)(nil)
 var _ applicationissue.CommentCreator = (*RESTAdapter)(nil)
 var _ applicationissue.LabelAdder = (*RESTAdapter)(nil)
 var _ applicationissue.LabelRemover = (*RESTAdapter)(nil)
+var _ applicationissue.MilestoneSetter = (*RESTAdapter)(nil)
+var _ applicationissue.MilestoneClearer = (*RESTAdapter)(nil)

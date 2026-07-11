@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.Inspector, creator applicationissue.Creator, updater applicationissue.Updater, stateChanger applicationissue.StateChanger, commentViewer applicationissue.CommentViewer, commentCreator applicationissue.CommentCreator, labelAdder applicationissue.LabelAdder, labelRemover applicationissue.LabelRemover) *cobra.Command {
+func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.Inspector, creator applicationissue.Creator, updater applicationissue.Updater, stateChanger applicationissue.StateChanger, commentViewer applicationissue.CommentViewer, commentCreator applicationissue.CommentCreator, labelAdder applicationissue.LabelAdder, labelRemover applicationissue.LabelRemover, milestoneSetter applicationissue.MilestoneSetter, milestoneClearer applicationissue.MilestoneClearer) *cobra.Command {
 	command := &cobra.Command{Use: "issue", Short: "Manage issues"}
 	command.AddCommand(newIssueListCommand(lister))
 	command.AddCommand(newIssueInspectCommand(inspector))
@@ -18,6 +18,90 @@ func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.
 	command.AddCommand(newIssueStateCommand(stateChanger))
 	command.AddCommand(newIssueCommentCommand(commentViewer, commentCreator))
 	command.AddCommand(newIssueLabelCommand(labelAdder, labelRemover))
+	command.AddCommand(newIssueMilestoneCommand(milestoneSetter, milestoneClearer))
+	return command
+}
+
+func newIssueMilestoneCommand(setter applicationissue.MilestoneSetter, clearer applicationissue.MilestoneClearer) *cobra.Command {
+	command := &cobra.Command{Use: "milestone", Short: "Manage issue milestones"}
+	command.AddCommand(newIssueMilestoneSetCommand(setter))
+	command.AddCommand(newIssueMilestoneClearCommand(clearer))
+	return command
+}
+
+func newIssueMilestoneSetCommand(setter applicationissue.MilestoneSetter) *cobra.Command {
+	var instance string
+	command := &cobra.Command{Use: "set OWNER/NAME NUMBER MILESTONE", Short: "Set issue milestone", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 3 {
+			return newCommandError(categoryValidation, "set issue milestone", fmt.Errorf("OWNER/NAME, issue number, and milestone are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "set issue milestone", err)
+		}
+		number, err := strconv.Atoi(args[1])
+		if err != nil || number < 1 {
+			return newCommandError(categoryValidation, "set issue milestone", fmt.Errorf("issue number must be a positive integer"))
+		}
+		if strings.TrimSpace(args[2]) == "" {
+			return newCommandError(categoryValidation, "set issue milestone", fmt.Errorf("milestone is required"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if setter == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			setter = dependencies.MilestoneSetter
+			if setter == nil {
+				return newCommandError(categoryInternal, "set issue milestone", fmt.Errorf("milestone setter unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		milestone, err := applicationissue.NewSetMilestoneUseCase(setter).Execute(command.Context(), applicationissue.SetMilestoneRequest{Owner: parts[0], Name: parts[1], Number: number, Milestone: args[2]})
+		if err != nil {
+			return mapApplicationError(err, "set issue milestone")
+		}
+		return (issuePresenter{}).PresentMilestoneSet(command.OutOrStdout(), number, milestone)
+	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
+	return command
+}
+
+func newIssueMilestoneClearCommand(clearer applicationissue.MilestoneClearer) *cobra.Command {
+	var instance string
+	command := &cobra.Command{Use: "clear OWNER/NAME NUMBER", Short: "Clear issue milestone", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 2 {
+			return newCommandError(categoryValidation, "clear issue milestone", fmt.Errorf("OWNER/NAME and issue number are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "clear issue milestone", err)
+		}
+		number, err := strconv.Atoi(args[1])
+		if err != nil || number < 1 {
+			return newCommandError(categoryValidation, "clear issue milestone", fmt.Errorf("issue number must be a positive integer"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if clearer == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			clearer = dependencies.MilestoneClearer
+			if clearer == nil {
+				return newCommandError(categoryInternal, "clear issue milestone", fmt.Errorf("milestone clearer unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		if err := applicationissue.NewClearMilestoneUseCase(clearer).Execute(command.Context(), applicationissue.ClearMilestoneRequest{Owner: parts[0], Name: parts[1], Number: number}); err != nil {
+			return mapApplicationError(err, "clear issue milestone")
+		}
+		return (issuePresenter{}).PresentMilestoneCleared(command.OutOrStdout(), number)
+	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 

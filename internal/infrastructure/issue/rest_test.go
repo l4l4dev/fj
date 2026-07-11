@@ -148,3 +148,39 @@ func TestRESTAdapterLabels(t *testing.T) {
 		t.Fatalf("unexpected remove label: %+v method=%s path=%s err=%v", label, transport.method, transport.path, err)
 	}
 }
+
+type milestoneTransport struct {
+	responses []string
+	methods   []string
+	paths     []string
+	bodies    [][]byte
+}
+
+func (stub *milestoneTransport) next(method, path string, body []byte) (*http.Response, error) {
+	stub.methods = append(stub.methods, method)
+	stub.paths = append(stub.paths, path)
+	stub.bodies = append(stub.bodies, body)
+	response := stub.responses[0]
+	stub.responses = stub.responses[1:]
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(response))}, nil
+}
+
+func (stub *milestoneTransport) Do(_ context.Context, method, path string, _ url.Values) (*http.Response, error) {
+	return stub.next(method, path, nil)
+}
+
+func (stub *milestoneTransport) DoJSON(_ context.Context, method, path string, _ url.Values, body []byte) (*http.Response, error) {
+	return stub.next(method, path, body)
+}
+
+func TestRESTAdapterMilestoneIdempotencyAndConversion(t *testing.T) {
+	transport := &milestoneTransport{responses: []string{`[{"id":7,"title":"v1"}]`, `{"number":12,"milestone":null}`, `{"number":12,"milestone":{"id":7,"title":"v1"}}`}}
+	milestone, err := NewRESTAdapter(transport).SetMilestone(context.Background(), applicationissue.SetMilestoneRequest{Owner: "alice", Name: "project", Number: 12, Milestone: "v1"})
+	if err != nil || milestone.ID != 7 || milestone.Title != "v1" || len(transport.methods) != 3 || transport.methods[2] != http.MethodPatch || string(transport.bodies[2]) != `{"milestone":7}` {
+		t.Fatalf("unexpected milestone set: %+v methods=%v paths=%v bodies=%v err=%v", milestone, transport.methods, transport.paths, transport.bodies, err)
+	}
+	transport = &milestoneTransport{responses: []string{`{"number":12,"milestone":null}`}}
+	if err := NewRESTAdapter(transport).ClearMilestone(context.Background(), applicationissue.ClearMilestoneRequest{Owner: "alice", Name: "project", Number: 12}); err != nil || len(transport.methods) != 1 {
+		t.Fatalf("unexpected clear idempotency: methods=%v err=%v", transport.methods, err)
+	}
+}
