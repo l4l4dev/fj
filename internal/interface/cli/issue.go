@@ -9,11 +9,71 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.Inspector, creator applicationissue.Creator) *cobra.Command {
+func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.Inspector, creator applicationissue.Creator, updater applicationissue.Updater) *cobra.Command {
 	command := &cobra.Command{Use: "issue", Short: "Manage issues"}
 	command.AddCommand(newIssueListCommand(lister))
 	command.AddCommand(newIssueInspectCommand(inspector))
 	command.AddCommand(newIssueCreateCommand(creator))
+	command.AddCommand(newIssueUpdateCommand(updater))
+	return command
+}
+
+func newIssueUpdateCommand(updater applicationissue.Updater) *cobra.Command {
+	var instance, title, body string
+	var titleSet, bodySet bool
+	command := &cobra.Command{Use: "update OWNER/NAME NUMBER", Short: "Update an issue", Args: func(command *cobra.Command, args []string) error {
+		titleSet = command.Flags().Changed("title")
+		bodySet = command.Flags().Changed("body")
+		if len(args) != 2 {
+			return newCommandError(categoryValidation, "update issue", fmt.Errorf("OWNER/NAME and issue number are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "update issue", err)
+		}
+		number, err := strconv.Atoi(args[1])
+		if err != nil || number < 1 {
+			return newCommandError(categoryValidation, "update issue", fmt.Errorf("issue number must be a positive integer"))
+		}
+		if !titleSet && !bodySet {
+			return newCommandError(categoryValidation, "update issue", fmt.Errorf("at least one issue field is required"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if updater == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			updater = dependencies.IssueUpdater
+			if updater == nil {
+				return newCommandError(categoryInternal, "update issue", fmt.Errorf("issue updater unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		request := applicationissue.UpdateRequest{Owner: parts[0], Name: parts[1], Number: number}
+		if titleSet {
+			request.Title = &title
+		}
+		if bodySet {
+			request.Body = &body
+		}
+		result, err := applicationissue.NewUpdateUseCase(updater).Execute(command.Context(), request)
+		if err != nil {
+			return mapApplicationError(err, "update issue")
+		}
+		fields := make([]string, 0, 2)
+		if titleSet {
+			fields = append(fields, "title")
+		}
+		if bodySet {
+			fields = append(fields, "body")
+		}
+		return (issuePresenter{}).PresentUpdated(command.OutOrStdout(), result, fields)
+	}}
+	command.Flags().StringVar(&title, "title", "", "issue title")
+	command.Flags().StringVar(&body, "body", "", "issue body")
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 

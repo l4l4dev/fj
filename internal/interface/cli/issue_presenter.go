@@ -3,11 +3,21 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	applicationissue "github.com/l4l4dev/fj/internal/application/issue"
 )
 
 type issuePresenter struct{}
+
+func (issuePresenter) PresentUpdated(w io.Writer, detail applicationissue.IssueDetail, fields []string) error {
+	body := detail.Body
+	if body == "" {
+		body = "-"
+	}
+	_, err := fmt.Fprintf(w, "Issue: #%d\nChanged fields: %s\nTitle: %s\nState: %s\nBody: %s\n", detail.Number, strings.Join(fields, ", "), detail.Title, detail.State, body)
+	return err
+}
 
 func (issuePresenter) PresentInspect(w io.Writer, detail applicationissue.IssueDetail) error {
 	body := detail.Body

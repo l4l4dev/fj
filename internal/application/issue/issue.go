@@ -73,6 +73,18 @@ type Creator interface {
 	Create(context.Context, CreateRequest) (IssueDetail, error)
 }
 
+type UpdateRequest struct {
+	Owner  string
+	Name   string
+	Number int
+	Title  *string
+	Body   *string
+}
+
+type Updater interface {
+	Update(context.Context, UpdateRequest) (IssueDetail, error)
+}
+
 type ListUseCase struct{ lister Lister }
 
 func NewListUseCase(lister Lister) ListUseCase { return ListUseCase{lister: lister} }
