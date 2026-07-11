@@ -103,6 +103,34 @@ func (adapter *RESTAdapter) Create(ctx context.Context, request applicationrepos
 	return toApplicationRepository(decoded), nil
 }
 
+func (adapter *RESTAdapter) Update(ctx context.Context, request applicationrepository.UpdateRequest) (applicationrepository.Repository, error) {
+	transport, ok := adapter.transport.(jsonTransport)
+	if !ok {
+		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("update repository", 0)
+	}
+	body := make(map[string]interface{})
+	if request.Description != nil {
+		body["description"] = *request.Description
+	}
+	if request.Private != nil {
+		body["private"] = *request.Private
+	}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("update repository", 0)
+	}
+	response, err := transport.DoJSON(ctx, http.MethodPatch, "/api/v1/repos/"+url.PathEscape(request.Owner)+"/"+url.PathEscape(request.Name), nil, encoded)
+	if err != nil {
+		return applicationrepository.Repository{}, translateRemoteError(err, "update repository")
+	}
+	defer response.Body.Close()
+	var decoded forgejoRepository
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("update repository", 0)
+	}
+	return toApplicationRepository(decoded), nil
+}
+
 func toApplicationRepository(repository forgejoRepository) applicationrepository.Repository {
 	return applicationrepository.Repository{
 		Owner:         repository.Owner.Login,
@@ -128,3 +156,4 @@ func translateRemoteError(err error, operation string) error {
 var _ applicationrepository.Service = (*RESTAdapter)(nil)
 var _ applicationrepository.Getter = (*RESTAdapter)(nil)
 var _ applicationrepository.Creator = (*RESTAdapter)(nil)
+var _ applicationrepository.Updater = (*RESTAdapter)(nil)

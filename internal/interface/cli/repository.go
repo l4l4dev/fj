@@ -21,6 +21,75 @@ func newRepositoryCommand(service applicationrepository.Service) *cobra.Command 
 		creator = candidate
 	}
 	command.AddCommand(newRepositoryCreateCommand(creator))
+	var updater applicationrepository.Updater
+	if candidate, ok := service.(applicationrepository.Updater); ok {
+		updater = candidate
+	}
+	command.AddCommand(newRepositoryUpdateCommand(updater))
+	return command
+}
+
+func newRepositoryUpdateCommand(updater applicationrepository.Updater) *cobra.Command {
+	var description, visibility, instance string
+	var descriptionSet, visibilitySet bool
+	command := &cobra.Command{
+		Use: "update OWNER/NAME", Short: "Update repository metadata",
+		Args: func(command *cobra.Command, args []string) error {
+			descriptionSet = command.Flags().Changed("description")
+			visibilitySet = command.Flags().Changed("visibility")
+			if len(args) != 1 {
+				return newCommandError(categoryValidation, "update repository", fmt.Errorf("OWNER/NAME is required"))
+			}
+			if err := validateRepositoryTarget(args[0]); err != nil {
+				return newCommandError(categoryValidation, "update repository", err)
+			}
+			if !descriptionSet && !visibilitySet {
+				return newCommandError(categoryValidation, "update repository", fmt.Errorf("at least one repository field is required"))
+			}
+			if visibilitySet && visibility != "public" && visibility != "private" {
+				return newCommandError(categoryValidation, "update repository", fmt.Errorf("visibility must be public or private"))
+			}
+			return nil
+		},
+		RunE: func(command *cobra.Command, args []string) error {
+			if updater == nil {
+				service, err := composeRepositoryService(command.Context(), instance)
+				if err != nil {
+					return err
+				}
+				var ok bool
+				updater, ok = service.(applicationrepository.Updater)
+				if !ok {
+					return newCommandError(categoryInternal, "update repository", fmt.Errorf("repository service does not support updates"))
+				}
+			}
+			parts := strings.SplitN(args[0], "/", 2)
+			request := applicationrepository.UpdateRequest{Owner: parts[0], Name: parts[1]}
+			if descriptionSet {
+				request.Description = &description
+			}
+			if visibilitySet {
+				private := visibility == "private"
+				request.Private = &private
+			}
+			result, err := applicationrepository.NewUpdateUseCase(updater).Execute(command.Context(), request)
+			if err != nil {
+				return mapUpdateRepositoryError(err)
+			}
+			fields := make([]string, 0, 2)
+			if descriptionSet {
+				fields = append(fields, "description")
+			}
+			if visibilitySet {
+				fields = append(fields, "visibility")
+			}
+			printUpdatedRepository(command, result, fields)
+			return nil
+		},
+	}
+	command.Flags().StringVar(&description, "description", "", "repository description")
+	command.Flags().StringVar(&visibility, "visibility", "", "repository visibility (public or private)")
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 
@@ -124,6 +193,18 @@ func printRepository(command *cobra.Command, repository applicationrepository.Re
 		defaultBranch = "-"
 	}
 	fmt.Fprintf(command.OutOrStdout(), "Repository: %s/%s\nDescription: %s\nPrivate: %t\nArchived: %t\nDefault branch: %s\n", repository.Owner, repository.Name, description, repository.Private, repository.Archived, defaultBranch)
+}
+
+func printUpdatedRepository(command *cobra.Command, repository applicationrepository.Repository, fields []string) {
+	description := repository.Description
+	if description == "" {
+		description = "-"
+	}
+	branch := repository.DefaultBranch
+	if branch == "" {
+		branch = "-"
+	}
+	fmt.Fprintf(command.OutOrStdout(), "Repository: %s/%s\nChanged fields: %s\nDescription: %s\nPrivate: %t\nArchived: %t\nDefault branch: %s\n", repository.Owner, repository.Name, strings.Join(fields, ", "), description, repository.Private, repository.Archived, branch)
 }
 
 func newRepositoryListCommand(service applicationrepository.Service) *cobra.Command {

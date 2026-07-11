@@ -139,6 +139,25 @@ func TestRESTAdapterCreatesRepositoryWithJSONBody(t *testing.T) {
 	}
 }
 
+func TestRESTAdapterUpdatesOnlyExplicitFields(t *testing.T) {
+	var path, body string
+	adapter := NewRESTAdapter(jsonTransportFunc(func(_ context.Context, method, receivedPath string, _ url.Values, receivedBody []byte) (*http.Response, error) {
+		if method != http.MethodPatch {
+			t.Errorf("method = %s", method)
+		}
+		path, body = receivedPath, string(receivedBody)
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"name":"project","owner":{"login":"alice"},"private":true}`))}, nil
+	}))
+	if _, err := adapter.Update(context.Background(), applicationrepository.UpdateRequest{Owner: "alice", Name: "project", Private: boolPtr(true)}); err != nil {
+		t.Fatal(err)
+	}
+	if path != "/api/v1/repos/alice/project" || body != `{"private":true}` {
+		t.Fatalf("request = %s %s", path, body)
+	}
+}
+
+func boolPtr(value bool) *bool { return &value }
+
 func TestRESTAdapterTranslatesFailuresSafely(t *testing.T) {
 	const secret = "secret-token"
 	tests := []struct {

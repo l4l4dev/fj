@@ -30,6 +30,20 @@ func (service *repositoryService) Create(_ context.Context, request applicationr
 	return applicationrepository.Repository{Owner: "alice", Name: request.Name, Description: request.Description, Private: request.Private}, nil
 }
 
+func (service *repositoryService) Update(_ context.Context, request applicationrepository.UpdateRequest) (applicationrepository.Repository, error) {
+	if service.err != nil {
+		return applicationrepository.Repository{}, service.err
+	}
+	result := applicationrepository.Repository{Owner: request.Owner, Name: request.Name, Description: "", Archived: false, DefaultBranch: "main"}
+	if request.Description != nil {
+		result.Description = *request.Description
+	}
+	if request.Private != nil {
+		result.Private = *request.Private
+	}
+	return result, nil
+}
+
 func (service *repositoryService) List(_ context.Context, request applicationrepository.ListRequest) ([]applicationrepository.Repository, error) {
 	service.request = request
 	return service.result, service.err
@@ -190,6 +204,45 @@ func TestRepositoryCreateCommandMapsErrorsSafely(t *testing.T) {
 		command.SetArgs([]string{"repo", "create", "project"})
 		err := command.Execute()
 		if err == nil || !strings.Contains(err.Error(), test.want) || strings.Contains(err.Error(), "secret") {
+			t.Fatalf("status %d: %v", test.status, err)
+		}
+	}
+}
+
+func TestRepositoryUpdateCommandPrintsChangedFields(t *testing.T) {
+	var output bytes.Buffer
+	command := NewRootCommandWithRepositoryService(&repositoryService{})
+	command.SetOut(&output)
+	command.SetArgs([]string{"repo", "update", "alice/project", "--description", "", "--visibility", "public"})
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	want := "Repository: alice/project\nChanged fields: description, visibility\nDescription: -\nPrivate: false\nArchived: false\nDefault branch: main\n"
+	if output.String() != want {
+		t.Fatalf("output = %q, want %q", output.String(), want)
+	}
+}
+
+func TestRepositoryUpdateCommandRejectsInvalidInput(t *testing.T) {
+	for _, args := range [][]string{{"repo", "update", "alice/project"}, {"repo", "update", "bad"}, {"repo", "update", "alice/project", "--visibility", "other"}} {
+		command := NewRootCommandWithRepositoryService(&repositoryService{})
+		command.SetArgs(args)
+		if err := command.Execute(); err == nil {
+			t.Fatalf("args %v accepted", args)
+		}
+	}
+}
+
+func TestRepositoryUpdateCommandMapsErrors(t *testing.T) {
+	for _, test := range []struct {
+		status int
+		want   string
+	}{{401, "authentication failed"}, {403, "authentication failed"}, {404, "repository not found"}, {409, "repository update conflict"}, {500, "remote operation failed"}} {
+		service := &repositoryService{err: applicationrepository.NewRemoteError("update repository", test.status)}
+		command := NewRootCommandWithRepositoryService(service)
+		command.SetArgs([]string{"repo", "update", "alice/project", "--visibility", "public"})
+		err := command.Execute()
+		if err == nil || !strings.Contains(err.Error(), test.want) {
 			t.Fatalf("status %d: %v", test.status, err)
 		}
 	}

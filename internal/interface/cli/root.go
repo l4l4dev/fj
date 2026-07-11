@@ -99,3 +99,27 @@ func mapCreateRepositoryError(err error) error {
 	}
 	return newCommandError(categoryValidation, "create repository", err)
 }
+
+func mapUpdateRepositoryError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var remoteError applicationrepository.RemoteError
+	if errors.As(err, &remoteError) {
+		if remoteError.StatusCode() == 401 || remoteError.StatusCode() == 403 {
+			return newCommandError(categoryAuthentication, "update repository", err)
+		}
+		if remoteError.StatusCode() == 404 {
+			return newCommandErrorWithMessage(categoryRemote, "update repository", "repository not found", err)
+		}
+		if remoteError.StatusCode() == 409 {
+			return newCommandErrorWithMessage(categoryRemote, "update repository", "repository update conflict", err)
+		}
+		return newCommandError(categoryRemote, "update repository", err)
+	}
+	var validationError applicationrepository.ValidationError
+	if errors.As(err, &validationError) {
+		return newCommandError(categoryValidation, "update repository", err)
+	}
+	return newCommandError(categoryInternal, "update repository", err)
+}

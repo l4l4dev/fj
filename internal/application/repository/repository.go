@@ -42,6 +42,17 @@ type Creator interface {
 	Create(context.Context, CreateRequest) (Repository, error)
 }
 
+type UpdateRequest struct {
+	Owner       string
+	Name        string
+	Description *string
+	Private     *bool
+}
+
+type Updater interface {
+	Update(context.Context, UpdateRequest) (Repository, error)
+}
+
 type RemoteError struct {
 	operation  string
 	statusCode int
