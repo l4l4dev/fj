@@ -46,15 +46,7 @@ func newRepositoryAccessCommand(viewer applicationrepository.AccessViewer) *cobr
 		if err != nil {
 			return mapApplicationError(err, "view repository access")
 		}
-		fmt.Fprintf(command.OutOrStdout(), "Repository: %s/%s\nCollaborators:\n", result.Owner, result.Name)
-		if len(result.Collaborators) == 0 {
-			fmt.Fprintln(command.OutOrStdout(), "No collaborators found.")
-			return nil
-		}
-		for _, collaborator := range result.Collaborators {
-			fmt.Fprintf(command.OutOrStdout(), "- %s: %s\n", collaborator.Username, collaborator.Permission)
-		}
-		return nil
+		return (repositoryPresenter{}).PresentAccess(command.OutOrStdout(), result)
 	}}
 	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
@@ -92,8 +84,7 @@ func newRepositoryArchiveCommand(archiver applicationrepository.Archiver, archiv
 		if err != nil {
 			return mapApplicationError(err, operation)
 		}
-		fmt.Fprintf(command.OutOrStdout(), "Repository: %s/%s\nArchived: %t\n", result.Owner, result.Name, result.Archived)
-		return nil
+		return (repositoryPresenter{}).PresentArchive(command.OutOrStdout(), result)
 	}}
 	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
@@ -152,8 +143,7 @@ func newRepositoryUpdateCommand(updater applicationrepository.Updater) *cobra.Co
 			if visibilitySet {
 				fields = append(fields, "visibility")
 			}
-			printUpdatedRepository(command, result, fields)
-			return nil
+			return (repositoryPresenter{}).PresentUpdated(command.OutOrStdout(), result, fields)
 		},
 	}
 	command.Flags().StringVar(&description, "description", "", "repository description")
@@ -190,8 +180,7 @@ func newRepositoryCreateCommand(creator applicationrepository.Creator) *cobra.Co
 			if err != nil {
 				return mapApplicationError(err, "create repository")
 			}
-			printRepository(command, result)
-			return nil
+			return (repositoryPresenter{}).PresentRepository(command.OutOrStdout(), result)
 		},
 	}
 	command.Flags().StringVar(&description, "description", "", "repository description")
@@ -231,8 +220,7 @@ func newRepositoryInspectCommand(getter applicationrepository.Getter) *cobra.Com
 			if err != nil {
 				return mapApplicationError(err, "inspect repository")
 			}
-			printRepository(command, result)
-			return nil
+			return (repositoryPresenter{}).PresentRepository(command.OutOrStdout(), result)
 		},
 	}
 	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
@@ -248,30 +236,6 @@ func validateRepositoryTarget(target string) error {
 		return fmt.Errorf("OWNER/NAME owner and name are required")
 	}
 	return nil
-}
-
-func printRepository(command *cobra.Command, repository applicationrepository.Repository) {
-	description := repository.Description
-	if description == "" {
-		description = "-"
-	}
-	defaultBranch := repository.DefaultBranch
-	if defaultBranch == "" {
-		defaultBranch = "-"
-	}
-	fmt.Fprintf(command.OutOrStdout(), "Repository: %s/%s\nDescription: %s\nPrivate: %t\nArchived: %t\nDefault branch: %s\n", repository.Owner, repository.Name, description, repository.Private, repository.Archived, defaultBranch)
-}
-
-func printUpdatedRepository(command *cobra.Command, repository applicationrepository.Repository, fields []string) {
-	description := repository.Description
-	if description == "" {
-		description = "-"
-	}
-	branch := repository.DefaultBranch
-	if branch == "" {
-		branch = "-"
-	}
-	fmt.Fprintf(command.OutOrStdout(), "Repository: %s/%s\nChanged fields: %s\nDescription: %s\nPrivate: %t\nArchived: %t\nDefault branch: %s\n", repository.Owner, repository.Name, strings.Join(fields, ", "), description, repository.Private, repository.Archived, branch)
 }
 
 func newRepositoryListCommand(service applicationrepository.Service) *cobra.Command {
@@ -300,14 +264,7 @@ func newRepositoryListCommand(service applicationrepository.Service) *cobra.Comm
 			if err != nil {
 				return mapApplicationError(err, "list repositories")
 			}
-			if len(result) == 0 {
-				fmt.Fprintln(command.OutOrStdout(), "No repositories found.")
-				return nil
-			}
-			for _, repository := range result {
-				fmt.Fprintf(command.OutOrStdout(), "%s/%s\n", repository.Owner, repository.Name)
-			}
-			return nil
+			return (repositoryPresenter{}).PresentList(command.OutOrStdout(), result)
 		},
 	}
 	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
