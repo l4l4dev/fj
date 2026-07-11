@@ -18,7 +18,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewRootCommand() *cobra.Command { return NewRootCommandWithDependencies(RepositoryDependencies{}) }
+type versionContextKey struct{}
+
+func NewRootCommand() *cobra.Command {
+	return NewRootCommandWithVersion(RepositoryDependencies{}, defaultVersion())
+}
+
+func NewRootCommandWithVersion(dependencies RepositoryDependencies, version string) *cobra.Command {
+	return newRootCommand(dependencies, version)
+}
 
 type RepositoryDependencies struct {
 	List                 applicationrepository.Service
@@ -45,7 +53,20 @@ type RepositoryDependencies struct {
 }
 
 func NewRootCommandWithDependencies(dependencies RepositoryDependencies) *cobra.Command {
-	command := &cobra.Command{Use: "fj", Short: "AI-first CLI for Forgejo", Args: cobra.NoArgs, SilenceErrors: true, SilenceUsage: true, RunE: func(command *cobra.Command, _ []string) error { return command.Help() }}
+	return newRootCommand(dependencies, defaultVersion())
+}
+
+func newRootCommand(dependencies RepositoryDependencies, version string) *cobra.Command {
+	var versionFlag bool
+	command := &cobra.Command{Use: "fj", Short: "AI-first CLI for Forgejo", Args: cobra.NoArgs, SilenceErrors: true, SilenceUsage: true, RunE: func(command *cobra.Command, _ []string) error {
+		if versionFlag {
+			return printVersion(command.OutOrStdout(), version)
+		}
+		return command.Help()
+	}}
+	command.SetContext(context.WithValue(context.Background(), versionContextKey{}, version))
+	command.PersistentFlags().BoolVar(&versionFlag, "version", false, "print the fj version")
+	command.AddCommand(newVersionCommand(version))
 	command.AddCommand(newRepositoryCommand(dependencies))
 	command.AddCommand(newIssueCommand(dependencies.Issues, dependencies.IssueInspector, dependencies.IssueCreator, dependencies.IssueUpdater, dependencies.IssueStateChanger, dependencies.CommentViewer, dependencies.CommentCreator, dependencies.LabelAdder, dependencies.LabelRemover, dependencies.MilestoneSetter, dependencies.MilestoneClearer, dependencies.Assigner, dependencies.Unassigner))
 	command.AddCommand(newPullRequestCommandWithInspector(dependencies.PullRequests, dependencies.PullRequestInspector))
@@ -92,10 +113,18 @@ func composeRepositoryDependencies(ctx context.Context, instanceName string) (Re
 	if err != nil {
 		return RepositoryDependencies{}, newCommandError(categoryAuthentication, "resolve credential", err)
 	}
-	adapter := infrastructurerepository.NewRESTAdapter(forgejo.NewClient(instance, credential, "dev", nil))
-	issueAdapter := infrastructureissue.NewRESTAdapter(forgejo.NewClient(instance, credential, "dev", nil))
-	pullRequestAdapter := infrastructurerpullrequest.NewRESTAdapter(forgejo.NewClient(instance, credential, "dev", nil))
+	version := versionFromContext(ctx)
+	adapter := infrastructurerepository.NewRESTAdapter(forgejo.NewClient(instance, credential, version, nil))
+	issueAdapter := infrastructureissue.NewRESTAdapter(forgejo.NewClient(instance, credential, version, nil))
+	pullRequestAdapter := infrastructurerpullrequest.NewRESTAdapter(forgejo.NewClient(instance, credential, version, nil))
 	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter, Issues: issueAdapter, IssueInspector: issueAdapter, IssueCreator: issueAdapter, IssueUpdater: issueAdapter, IssueStateChanger: issueAdapter, CommentViewer: issueAdapter, CommentCreator: issueAdapter, LabelAdder: issueAdapter, LabelRemover: issueAdapter, MilestoneSetter: issueAdapter, MilestoneClearer: issueAdapter, Assigner: issueAdapter, Unassigner: issueAdapter, PullRequests: pullRequestAdapter, PullRequestInspector: pullRequestAdapter}, nil
+}
+
+func versionFromContext(ctx context.Context) string {
+	if value, ok := ctx.Value(versionContextKey{}).(string); ok && value != "" {
+		return value
+	}
+	return defaultVersion()
 }
 
 func mapApplicationError(err error, operation string) error {
