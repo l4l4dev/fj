@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"github.com/l4l4dev/fj/internal/application/apperror"
 	"strings"
 )
 
@@ -11,10 +12,10 @@ func NewArchiveUseCase(archiver Archiver) ArchiveUseCase { return ArchiveUseCase
 
 func (useCase ArchiveUseCase) Execute(ctx context.Context, request ArchiveRequest) (Repository, error) {
 	if strings.TrimSpace(request.Owner) == "" {
-		return Repository{}, ValidationError{message: "repository owner is required"}
+		return Repository{}, apperror.NewValidation("archive repository", "repository owner is required")
 	}
 	if strings.TrimSpace(request.Name) == "" {
-		return Repository{}, ValidationError{message: "repository name is required"}
+		return Repository{}, apperror.NewValidation("archive repository", "repository name is required")
 	}
 	return useCase.archiver.SetArchived(ctx, request)
 }

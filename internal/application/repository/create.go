@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"fmt"
+	"github.com/l4l4dev/fj/internal/application/apperror"
 	"strings"
 )
 
@@ -12,7 +12,7 @@ func NewCreateUseCase(creator Creator) CreateUseCase { return CreateUseCase{crea
 
 func (useCase CreateUseCase) Execute(ctx context.Context, request CreateRequest) (Repository, error) {
 	if strings.TrimSpace(request.Name) == "" {
-		return Repository{}, fmt.Errorf("repository name is required")
+		return Repository{}, apperror.NewValidation("create repository", "repository name is required")
 	}
 	return useCase.creator.Create(ctx, request)
 }

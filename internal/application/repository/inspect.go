@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"fmt"
+	"github.com/l4l4dev/fj/internal/application/apperror"
 	"strings"
 )
 
@@ -16,10 +16,10 @@ func NewInspectUseCase(getter Getter) InspectUseCase {
 
 func (useCase InspectUseCase) Execute(ctx context.Context, request GetRequest) (Repository, error) {
 	if strings.TrimSpace(request.Owner) == "" {
-		return Repository{}, fmt.Errorf("repository owner is required")
+		return Repository{}, apperror.NewValidation("inspect repository", "repository owner is required")
 	}
 	if strings.TrimSpace(request.Name) == "" {
-		return Repository{}, fmt.Errorf("repository name is required")
+		return Repository{}, apperror.NewValidation("inspect repository", "repository name is required")
 	}
 	return useCase.getter.Get(ctx, request)
 }

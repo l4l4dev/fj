@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/l4l4dev/fj/internal/application/apperror"
 	applicationrepository "github.com/l4l4dev/fj/internal/application/repository"
 )
 
@@ -64,7 +65,7 @@ func (adapter *RESTAdapter) List(ctx context.Context, request applicationreposit
 
 	var decoded []forgejoRepository
 	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
-		return nil, applicationrepository.NewRemoteError("decode repositories", 0)
+		return nil, apperror.New(apperror.Remote, "list repositories", "")
 	}
 
 	result := make([]applicationrepository.Repository, 0, len(decoded))
@@ -84,7 +85,7 @@ func (adapter *RESTAdapter) Get(ctx context.Context, request applicationreposito
 
 	var decoded forgejoRepository
 	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
-		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("inspect repository", 0)
+		return applicationrepository.Repository{}, apperror.New(apperror.Remote, "inspect repository", "")
 	}
 	return toApplicationRepository(decoded), nil
 }
@@ -92,7 +93,7 @@ func (adapter *RESTAdapter) Get(ctx context.Context, request applicationreposito
 func (adapter *RESTAdapter) Create(ctx context.Context, request applicationrepository.CreateRequest) (applicationrepository.Repository, error) {
 	transport, ok := adapter.transport.(jsonTransport)
 	if !ok {
-		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("create repository", 0)
+		return applicationrepository.Repository{}, apperror.New(apperror.Remote, "create repository", "")
 	}
 	body, err := json.Marshal(struct {
 		Name        string `json:"name"`
@@ -100,7 +101,7 @@ func (adapter *RESTAdapter) Create(ctx context.Context, request applicationrepos
 		Private     bool   `json:"private"`
 	}{Name: request.Name, Description: request.Description, Private: request.Private})
 	if err != nil {
-		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("create repository", 0)
+		return applicationrepository.Repository{}, apperror.New(apperror.Remote, "create repository", "")
 	}
 	response, err := transport.DoJSON(ctx, http.MethodPost, "/api/v1/user/repos", nil, body)
 	if err != nil {
@@ -109,7 +110,7 @@ func (adapter *RESTAdapter) Create(ctx context.Context, request applicationrepos
 	defer response.Body.Close()
 	var decoded forgejoRepository
 	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
-		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("create repository", 0)
+		return applicationrepository.Repository{}, apperror.New(apperror.Remote, "create repository", "")
 	}
 	return toApplicationRepository(decoded), nil
 }
@@ -117,7 +118,7 @@ func (adapter *RESTAdapter) Create(ctx context.Context, request applicationrepos
 func (adapter *RESTAdapter) Update(ctx context.Context, request applicationrepository.UpdateRequest) (applicationrepository.Repository, error) {
 	transport, ok := adapter.transport.(jsonTransport)
 	if !ok {
-		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("update repository", 0)
+		return applicationrepository.Repository{}, apperror.New(apperror.Remote, "update repository", "")
 	}
 	body := make(map[string]interface{})
 	if request.Description != nil {
@@ -128,7 +129,7 @@ func (adapter *RESTAdapter) Update(ctx context.Context, request applicationrepos
 	}
 	encoded, err := json.Marshal(body)
 	if err != nil {
-		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("update repository", 0)
+		return applicationrepository.Repository{}, apperror.New(apperror.Remote, "update repository", "")
 	}
 	response, err := transport.DoJSON(ctx, http.MethodPatch, "/api/v1/repos/"+url.PathEscape(request.Owner)+"/"+url.PathEscape(request.Name), nil, encoded)
 	if err != nil {
@@ -137,7 +138,7 @@ func (adapter *RESTAdapter) Update(ctx context.Context, request applicationrepos
 	defer response.Body.Close()
 	var decoded forgejoRepository
 	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
-		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("update repository", 0)
+		return applicationrepository.Repository{}, apperror.New(apperror.Remote, "update repository", "")
 	}
 	return toApplicationRepository(decoded), nil
 }
@@ -145,13 +146,13 @@ func (adapter *RESTAdapter) Update(ctx context.Context, request applicationrepos
 func (adapter *RESTAdapter) SetArchived(ctx context.Context, request applicationrepository.ArchiveRequest) (applicationrepository.Repository, error) {
 	transport, ok := adapter.transport.(jsonTransport)
 	if !ok {
-		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("archive repository", 0)
+		return applicationrepository.Repository{}, apperror.New(apperror.Remote, "archive repository", "")
 	}
 	body, err := json.Marshal(struct {
 		Archived bool `json:"archived"`
 	}{Archived: request.Archived})
 	if err != nil {
-		return applicationrepository.Repository{}, applicationrepository.NewRemoteError("archive repository", 0)
+		return applicationrepository.Repository{}, apperror.New(apperror.Remote, "archive repository", "")
 	}
 	response, err := transport.DoJSON(ctx, http.MethodPatch, "/api/v1/repos/"+url.PathEscape(request.Owner)+"/"+url.PathEscape(request.Name), nil, body)
 	if err != nil {
@@ -168,7 +169,7 @@ func (adapter *RESTAdapter) SetArchived(ctx context.Context, request application
 		if !request.Archived {
 			op = "restore repository"
 		}
-		return applicationrepository.Repository{}, applicationrepository.NewRemoteError(op, 0)
+		return applicationrepository.Repository{}, apperror.New(apperror.Remote, op, "")
 	}
 	return toApplicationRepository(decoded), nil
 }
@@ -181,7 +182,7 @@ func (adapter *RESTAdapter) ViewAccess(ctx context.Context, request applicationr
 	defer response.Body.Close()
 	var decoded []forgejoCollaborator
 	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
-		return applicationrepository.RepositoryAccess{}, applicationrepository.NewRemoteError("view repository access", 0)
+		return applicationrepository.RepositoryAccess{}, apperror.New(apperror.Remote, "view repository access", "")
 	}
 	result := applicationrepository.RepositoryAccess{Owner: request.Owner, Name: request.Name, Collaborators: make([]applicationrepository.Collaborator, 0, len(decoded))}
 	for _, collaborator := range decoded {
@@ -214,9 +215,28 @@ func translateRemoteError(err error, operation string) error {
 		StatusCode() int
 	}
 	if errors.As(err, &safeError) {
-		return applicationrepository.NewRemoteError(safeError.Operation(), safeError.StatusCode())
+		category := apperror.Remote
+		switch safeError.StatusCode() {
+		case 401, 403:
+			category = apperror.Authentication
+		case 404:
+			category = apperror.NotFound
+		case 409:
+			category = apperror.Conflict
+		}
+		message := ""
+		if category == apperror.NotFound {
+			message = "repository not found"
+		}
+		if category == apperror.Conflict {
+			message = "repository update conflict"
+			if operation == "create repository" {
+				message = "repository already exists"
+			}
+		}
+		return apperror.New(category, operation, message)
 	}
-	return applicationrepository.NewRemoteError(operation, 0)
+	return apperror.New(apperror.Remote, operation, "")
 }
 
 var _ applicationrepository.Service = (*RESTAdapter)(nil)

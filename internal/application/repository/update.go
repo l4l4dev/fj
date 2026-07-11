@@ -2,16 +2,15 @@ package repository
 
 import (
 	"context"
+	"github.com/l4l4dev/fj/internal/application/apperror"
 	"strings"
 )
 
 type UpdateUseCase struct{ updater Updater }
 
-type ValidationError struct{ message string }
-
-func (err ValidationError) Error() string { return err.message }
-
-func newValidationError(message string) error { return ValidationError{message: message} }
+func newValidationError(message string) error {
+	return apperror.NewValidation("update repository", message)
+}
 
 func NewUpdateUseCase(updater Updater) UpdateUseCase { return UpdateUseCase{updater: updater} }
 

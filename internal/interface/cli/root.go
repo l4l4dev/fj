@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/l4l4dev/fj/internal/application/apperror"
 	applicationauth "github.com/l4l4dev/fj/internal/application/auth"
 	applicationrepository "github.com/l4l4dev/fj/internal/application/repository"
 	infrastructureauth "github.com/l4l4dev/fj/internal/infrastructure/auth"
@@ -13,155 +14,114 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewRootCommand() *cobra.Command {
-	return NewRootCommandWithRepositoryService(nil)
+func NewRootCommand() *cobra.Command { return NewRootCommandWithDependencies(RepositoryDependencies{}) }
+
+type RepositoryDependencies struct {
+	List    applicationrepository.Service
+	Inspect applicationrepository.Getter
+	Create  applicationrepository.Creator
+	Update  applicationrepository.Updater
+	Archive applicationrepository.Archiver
+	Access  applicationrepository.AccessViewer
 }
 
-func NewRootCommandWithRepositoryService(service applicationrepository.Service) *cobra.Command {
-	command := &cobra.Command{
-		Use:           "fj",
-		Short:         "AI-first CLI for Forgejo",
-		Args:          cobra.NoArgs,
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		RunE: func(command *cobra.Command, _ []string) error {
-			return command.Help()
-		},
-	}
-	command.AddCommand(newRepositoryCommand(service))
+func NewRootCommandWithDependencies(dependencies RepositoryDependencies) *cobra.Command {
+	command := &cobra.Command{Use: "fj", Short: "AI-first CLI for Forgejo", Args: cobra.NoArgs, SilenceErrors: true, SilenceUsage: true, RunE: func(command *cobra.Command, _ []string) error { return command.Help() }}
+	command.AddCommand(newRepositoryCommand(dependencies))
 	command.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return newCommandError(categoryValidation, "execute command", err)
 	})
 	return command
 }
 
-func composeRepositoryService(ctx context.Context, instanceName string) (applicationrepository.Service, error) {
+func NewRootCommandWithRepositoryService(service applicationrepository.Service) *cobra.Command {
+	return NewRootCommandWithDependencies(legacyRepositoryDependencies(service))
+}
+
+func legacyRepositoryDependencies(service applicationrepository.Service) RepositoryDependencies {
+	dependencies := RepositoryDependencies{List: service}
+	if value, ok := service.(applicationrepository.Getter); ok {
+		dependencies.Inspect = value
+	}
+	if value, ok := service.(applicationrepository.Creator); ok {
+		dependencies.Create = value
+	}
+	if value, ok := service.(applicationrepository.Updater); ok {
+		dependencies.Update = value
+	}
+	if value, ok := service.(applicationrepository.Archiver); ok {
+		dependencies.Archive = value
+	}
+	if value, ok := service.(applicationrepository.AccessViewer); ok {
+		dependencies.Access = value
+	}
+	return dependencies
+}
+
+func composeRepositoryDependencies(ctx context.Context, instanceName string) (RepositoryDependencies, error) {
 	configuration, err := infrastructureconfig.Load()
 	if err != nil {
-		return nil, newCommandError(categoryValidation, "load configuration", err)
+		return RepositoryDependencies{}, newCommandError(categoryValidation, "load configuration", err)
 	}
 	instance, err := configuration.SelectInstance(instanceName)
 	if err != nil {
-		return nil, newCommandError(categoryValidation, "select instance", err)
+		return RepositoryDependencies{}, newCommandError(categoryValidation, "select instance", err)
 	}
 	credential, err := applicationauth.NewResolver(infrastructureauth.NewEnvironmentProvider()).Resolve(ctx, instance.Credential)
 	if err != nil {
-		return nil, newCommandError(categoryAuthentication, "resolve credential", err)
+		return RepositoryDependencies{}, newCommandError(categoryAuthentication, "resolve credential", err)
 	}
-	client := forgejo.NewClient(instance, credential, "dev", nil)
-	return infrastructurerepository.NewRESTAdapter(client), nil
+	adapter := infrastructurerepository.NewRESTAdapter(forgejo.NewClient(instance, credential, "dev", nil))
+	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter}, nil
 }
 
-func mapRepositoryError(err error) error {
+func mapApplicationError(err error, operation string) error {
 	if err == nil {
 		return nil
 	}
-	var remoteError applicationrepository.RemoteError
-	if errors.As(err, &remoteError) {
-		if remoteError.StatusCode() == 401 || remoteError.StatusCode() == 403 {
-			return newCommandError(categoryAuthentication, "list repositories", err)
+	var appErr apperror.Error
+	if errors.As(err, &appErr) {
+		category := categoryInternal
+		switch appErr.Category {
+		case apperror.Validation:
+			category = categoryValidation
+		case apperror.Authentication:
+			category = categoryAuthentication
+		case apperror.NotFound, apperror.Conflict, apperror.Remote:
+			category = categoryRemote
 		}
-		return newCommandError(categoryRemote, "list repositories", err)
-	}
-	return newCommandError(categoryValidation, "list repositories", err)
-}
-
-func mapInspectRepositoryError(err error) error {
-	if err == nil {
-		return nil
-	}
-	var remoteError applicationrepository.RemoteError
-	if errors.As(err, &remoteError) {
-		if remoteError.StatusCode() == 401 || remoteError.StatusCode() == 403 {
-			return newCommandError(categoryAuthentication, "inspect repository", err)
+		message := appErr.Message
+		if message == "" {
+			return newCommandError(category, operation, err)
 		}
-		if remoteError.StatusCode() == 404 {
-			return newCommandErrorWithMessage(categoryRemote, "inspect repository", "repository not found", err)
-		}
-		return newCommandError(categoryRemote, "inspect repository", err)
+		return newCommandErrorWithMessage(category, operation, message, err)
 	}
-	return newCommandError(categoryValidation, "inspect repository", err)
-}
-
-func mapCreateRepositoryError(err error) error {
-	if err == nil {
-		return nil
-	}
-	var remoteError applicationrepository.RemoteError
-	if errors.As(err, &remoteError) {
-		if remoteError.StatusCode() == 401 || remoteError.StatusCode() == 403 {
-			return newCommandError(categoryAuthentication, "create repository", err)
+	var remote applicationrepository.RemoteError
+	if errors.As(err, &remote) {
+		category := categoryRemote
+		message := ""
+		switch remote.Category() {
+		case apperror.Authentication:
+			category = categoryAuthentication
+		case apperror.NotFound:
+			category = categoryRemote
+			message = "repository not found"
+		case apperror.Conflict:
+			category = categoryRemote
+			if operation == "create repository" {
+				message = "repository already exists"
+			} else if operation == "update repository" {
+				message = "repository update conflict"
+			}
 		}
-		if remoteError.StatusCode() == 409 {
-			return newCommandErrorWithMessage(categoryRemote, "create repository", "repository already exists", err)
+		if message != "" {
+			return newCommandErrorWithMessage(category, operation, message, err)
 		}
-		return newCommandError(categoryRemote, "create repository", err)
+		return newCommandError(category, operation, err)
 	}
-	return newCommandError(categoryValidation, "create repository", err)
-}
-
-func mapUpdateRepositoryError(err error) error {
-	if err == nil {
-		return nil
-	}
-	var remoteError applicationrepository.RemoteError
-	if errors.As(err, &remoteError) {
-		if remoteError.StatusCode() == 401 || remoteError.StatusCode() == 403 {
-			return newCommandError(categoryAuthentication, "update repository", err)
-		}
-		if remoteError.StatusCode() == 404 {
-			return newCommandErrorWithMessage(categoryRemote, "update repository", "repository not found", err)
-		}
-		if remoteError.StatusCode() == 409 {
-			return newCommandErrorWithMessage(categoryRemote, "update repository", "repository update conflict", err)
-		}
-		return newCommandError(categoryRemote, "update repository", err)
-	}
-	var validationError applicationrepository.ValidationError
-	if errors.As(err, &validationError) {
-		return newCommandError(categoryValidation, "update repository", err)
-	}
-	return newCommandError(categoryInternal, "update repository", err)
-}
-
-func mapArchiveRepositoryError(err error, operation string) error {
-	if err == nil {
-		return nil
-	}
-	var remoteError applicationrepository.RemoteError
-	if errors.As(err, &remoteError) {
-		if remoteError.StatusCode() == 401 || remoteError.StatusCode() == 403 {
-			return newCommandError(categoryAuthentication, operation, err)
-		}
-		if remoteError.StatusCode() == 404 {
-			return newCommandErrorWithMessage(categoryRemote, operation, "repository not found", err)
-		}
-		return newCommandError(categoryRemote, operation, err)
-	}
-	var validationError applicationrepository.ValidationError
-	if errors.As(err, &validationError) {
+	var validation apperror.ValidationError
+	if errors.As(err, &validation) {
 		return newCommandError(categoryValidation, operation, err)
 	}
 	return newCommandError(categoryInternal, operation, err)
-}
-
-func mapAccessRepositoryError(err error) error {
-	if err == nil {
-		return nil
-	}
-	var remoteError applicationrepository.RemoteError
-	if errors.As(err, &remoteError) {
-		if remoteError.StatusCode() == 401 || remoteError.StatusCode() == 403 {
-			return newCommandError(categoryAuthentication, "view repository access", err)
-		}
-		if remoteError.StatusCode() == 404 {
-			return newCommandErrorWithMessage(categoryRemote, "view repository access", "repository not found", err)
-		}
-		return newCommandError(categoryRemote, "view repository access", err)
-	}
-	var validationError applicationrepository.ValidationError
-	if errors.As(err, &validationError) {
-		return newCommandError(categoryValidation, "view repository access", err)
-	}
-	return newCommandError(categoryInternal, "view repository access", err)
 }

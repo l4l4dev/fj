@@ -8,35 +8,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newRepositoryCommand(service applicationrepository.Service) *cobra.Command {
+func newRepositoryCommand(dependencies RepositoryDependencies) *cobra.Command {
 	command := &cobra.Command{Use: "repo", Short: "Manage repositories"}
-	command.AddCommand(newRepositoryListCommand(service))
-	var getter applicationrepository.Getter
-	if candidate, ok := service.(applicationrepository.Getter); ok {
-		getter = candidate
-	}
-	command.AddCommand(newRepositoryInspectCommand(getter))
-	var creator applicationrepository.Creator
-	if candidate, ok := service.(applicationrepository.Creator); ok {
-		creator = candidate
-	}
-	command.AddCommand(newRepositoryCreateCommand(creator))
-	var updater applicationrepository.Updater
-	if candidate, ok := service.(applicationrepository.Updater); ok {
-		updater = candidate
-	}
-	command.AddCommand(newRepositoryUpdateCommand(updater))
-	var archiver applicationrepository.Archiver
-	if candidate, ok := service.(applicationrepository.Archiver); ok {
-		archiver = candidate
-	}
-	command.AddCommand(newRepositoryArchiveCommand(archiver, true))
-	command.AddCommand(newRepositoryArchiveCommand(archiver, false))
-	var accessViewer applicationrepository.AccessViewer
-	if candidate, ok := service.(applicationrepository.AccessViewer); ok {
-		accessViewer = candidate
-	}
-	command.AddCommand(newRepositoryAccessCommand(accessViewer))
+	command.AddCommand(newRepositoryListCommand(dependencies.List))
+	command.AddCommand(newRepositoryInspectCommand(dependencies.Inspect))
+	command.AddCommand(newRepositoryCreateCommand(dependencies.Create))
+	command.AddCommand(newRepositoryUpdateCommand(dependencies.Update))
+	command.AddCommand(newRepositoryArchiveCommand(dependencies.Archive, true))
+	command.AddCommand(newRepositoryArchiveCommand(dependencies.Archive, false))
+	command.AddCommand(newRepositoryAccessCommand(dependencies.Access))
 	return command
 }
 
@@ -52,20 +32,19 @@ func newRepositoryAccessCommand(viewer applicationrepository.AccessViewer) *cobr
 		return nil
 	}, RunE: func(command *cobra.Command, args []string) error {
 		if viewer == nil {
-			service, err := composeRepositoryService(command.Context(), instance)
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
 			if err != nil {
 				return err
 			}
-			var ok bool
-			viewer, ok = service.(applicationrepository.AccessViewer)
-			if !ok {
+			viewer = dependencies.Access
+			if viewer == nil {
 				return newCommandError(categoryInternal, "view repository access", fmt.Errorf("access viewer unavailable"))
 			}
 		}
 		parts := strings.SplitN(args[0], "/", 2)
 		result, err := applicationrepository.NewAccessUseCase(viewer).Execute(command.Context(), applicationrepository.AccessRequest{Owner: parts[0], Name: parts[1]})
 		if err != nil {
-			return mapAccessRepositoryError(err)
+			return mapApplicationError(err, "view repository access")
 		}
 		fmt.Fprintf(command.OutOrStdout(), "Repository: %s/%s\nCollaborators:\n", result.Owner, result.Name)
 		if len(result.Collaborators) == 0 {
@@ -99,20 +78,19 @@ func newRepositoryArchiveCommand(archiver applicationrepository.Archiver, archiv
 		return nil
 	}, RunE: func(command *cobra.Command, args []string) error {
 		if archiver == nil {
-			service, err := composeRepositoryService(command.Context(), instance)
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
 			if err != nil {
 				return err
 			}
-			var ok bool
-			archiver, ok = service.(applicationrepository.Archiver)
-			if !ok {
+			archiver = dependencies.Archive
+			if archiver == nil {
 				return newCommandError(categoryInternal, operation, fmt.Errorf("repository service does not support archive operations"))
 			}
 		}
 		parts := strings.SplitN(args[0], "/", 2)
 		result, err := applicationrepository.NewArchiveUseCase(archiver).Execute(command.Context(), applicationrepository.ArchiveRequest{Owner: parts[0], Name: parts[1], Archived: archived})
 		if err != nil {
-			return mapArchiveRepositoryError(err, operation)
+			return mapApplicationError(err, operation)
 		}
 		fmt.Fprintf(command.OutOrStdout(), "Repository: %s/%s\nArchived: %t\n", result.Owner, result.Name, result.Archived)
 		return nil
@@ -145,13 +123,12 @@ func newRepositoryUpdateCommand(updater applicationrepository.Updater) *cobra.Co
 		},
 		RunE: func(command *cobra.Command, args []string) error {
 			if updater == nil {
-				service, err := composeRepositoryService(command.Context(), instance)
+				dependencies, err := composeRepositoryDependencies(command.Context(), instance)
 				if err != nil {
 					return err
 				}
-				var ok bool
-				updater, ok = service.(applicationrepository.Updater)
-				if !ok {
+				updater = dependencies.Update
+				if updater == nil {
 					return newCommandError(categoryInternal, "update repository", fmt.Errorf("repository service does not support updates"))
 				}
 			}
@@ -166,7 +143,7 @@ func newRepositoryUpdateCommand(updater applicationrepository.Updater) *cobra.Co
 			}
 			result, err := applicationrepository.NewUpdateUseCase(updater).Execute(command.Context(), request)
 			if err != nil {
-				return mapUpdateRepositoryError(err)
+				return mapApplicationError(err, "update repository")
 			}
 			fields := make([]string, 0, 2)
 			if descriptionSet {
@@ -200,19 +177,18 @@ func newRepositoryCreateCommand(creator applicationrepository.Creator) *cobra.Co
 		},
 		RunE: func(command *cobra.Command, args []string) error {
 			if creator == nil {
-				service, err := composeRepositoryService(command.Context(), instance)
+				dependencies, err := composeRepositoryDependencies(command.Context(), instance)
 				if err != nil {
 					return err
 				}
-				var ok bool
-				creator, ok = service.(applicationrepository.Creator)
-				if !ok {
+				creator = dependencies.Create
+				if creator == nil {
 					return newCommandError(categoryInternal, "create repository", fmt.Errorf("repository service does not support creation"))
 				}
 			}
 			result, err := applicationrepository.NewCreateUseCase(creator).Execute(command.Context(), applicationrepository.CreateRequest{Name: args[0], Description: description, Private: visibility == "private"})
 			if err != nil {
-				return mapCreateRepositoryError(err)
+				return mapApplicationError(err, "create repository")
 			}
 			printRepository(command, result)
 			return nil
@@ -240,13 +216,12 @@ func newRepositoryInspectCommand(getter applicationrepository.Getter) *cobra.Com
 		},
 		RunE: func(command *cobra.Command, args []string) error {
 			if getter == nil {
-				service, err := composeRepositoryService(command.Context(), instance)
+				dependencies, err := composeRepositoryDependencies(command.Context(), instance)
 				if err != nil {
 					return err
 				}
-				var ok bool
-				getter, ok = service.(applicationrepository.Getter)
-				if !ok {
+				getter = dependencies.Inspect
+				if getter == nil {
 					return newCommandError(categoryInternal, "inspect repository", fmt.Errorf("repository service does not support inspection"))
 				}
 			}
@@ -254,7 +229,7 @@ func newRepositoryInspectCommand(getter applicationrepository.Getter) *cobra.Com
 			owner, name := parts[0], parts[1]
 			result, err := applicationrepository.NewInspectUseCase(getter).Execute(command.Context(), applicationrepository.GetRequest{Owner: owner, Name: name})
 			if err != nil {
-				return mapInspectRepositoryError(err)
+				return mapApplicationError(err, "inspect repository")
 			}
 			printRepository(command, result)
 			return nil
@@ -315,14 +290,15 @@ func newRepositoryListCommand(service applicationrepository.Service) *cobra.Comm
 			}
 			if service == nil {
 				var err error
-				service, err = composeRepositoryService(command.Context(), instance)
+				dependencies, err := composeRepositoryDependencies(command.Context(), instance)
 				if err != nil {
 					return err
 				}
+				service = dependencies.List
 			}
 			result, err := applicationrepository.NewListUseCase(service).Execute(command.Context(), applicationrepository.ListRequest{Page: page, Limit: limit})
 			if err != nil {
-				return mapRepositoryError(err)
+				return mapApplicationError(err, "list repositories")
 			}
 			if len(result) == 0 {
 				fmt.Fprintln(command.OutOrStdout(), "No repositories found.")

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4l4dev/fj/internal/application/apperror"
 	applicationrepository "github.com/l4l4dev/fj/internal/application/repository"
 )
 
@@ -180,11 +181,11 @@ func TestRESTAdapterTranslatesFailuresSafely(t *testing.T) {
 			}))
 
 			_, err := adapter.List(context.Background(), applicationrepository.ListRequest{})
-			var remoteError applicationrepository.RemoteError
-			if !errors.As(err, &remoteError) {
-				t.Fatalf("List() error = %v, want Application RemoteError", err)
+			var applicationError apperror.Error
+			if !errors.As(err, &applicationError) {
+				t.Fatalf("List() error = %v, want Application error", err)
 			}
-			if strings.Contains(err.Error(), secret) || strings.Contains(remoteError.Error(), secret) {
+			if strings.Contains(err.Error(), secret) || strings.Contains(applicationError.Error(), secret) {
 				t.Errorf("translated error exposes sensitive data: %q", err)
 			}
 		})
