@@ -6,10 +6,12 @@ import (
 
 	"github.com/l4l4dev/fj/internal/application/apperror"
 	applicationauth "github.com/l4l4dev/fj/internal/application/auth"
+	applicationissue "github.com/l4l4dev/fj/internal/application/issue"
 	applicationrepository "github.com/l4l4dev/fj/internal/application/repository"
 	infrastructureauth "github.com/l4l4dev/fj/internal/infrastructure/auth"
 	infrastructureconfig "github.com/l4l4dev/fj/internal/infrastructure/config"
 	"github.com/l4l4dev/fj/internal/infrastructure/forgejo"
+	infrastructureissue "github.com/l4l4dev/fj/internal/infrastructure/issue"
 	infrastructurerepository "github.com/l4l4dev/fj/internal/infrastructure/repository"
 	"github.com/spf13/cobra"
 )
@@ -23,11 +25,13 @@ type RepositoryDependencies struct {
 	Update  applicationrepository.Updater
 	Archive applicationrepository.Archiver
 	Access  applicationrepository.AccessViewer
+	Issues  applicationissue.Lister
 }
 
 func NewRootCommandWithDependencies(dependencies RepositoryDependencies) *cobra.Command {
 	command := &cobra.Command{Use: "fj", Short: "AI-first CLI for Forgejo", Args: cobra.NoArgs, SilenceErrors: true, SilenceUsage: true, RunE: func(command *cobra.Command, _ []string) error { return command.Help() }}
 	command.AddCommand(newRepositoryCommand(dependencies))
+	command.AddCommand(newIssueCommand(dependencies.Issues))
 	command.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return newCommandError(categoryValidation, "execute command", err)
 	})
@@ -72,7 +76,8 @@ func composeRepositoryDependencies(ctx context.Context, instanceName string) (Re
 		return RepositoryDependencies{}, newCommandError(categoryAuthentication, "resolve credential", err)
 	}
 	adapter := infrastructurerepository.NewRESTAdapter(forgejo.NewClient(instance, credential, "dev", nil))
-	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter}, nil
+	issueAdapter := infrastructureissue.NewRESTAdapter(forgejo.NewClient(instance, credential, "dev", nil))
+	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter, Issues: issueAdapter}, nil
 }
 
 func mapApplicationError(err error, operation string) error {
