@@ -4,7 +4,7 @@ title: Public CLI Foundation
 status: To Do
 assignee: []
 created_date: '2026-07-11 09:08'
-updated_date: '2026-07-11 09:13'
+updated_date: '2026-07-11 17:15'
 labels: []
 dependencies: []
 priority: low
@@ -24,3 +24,14 @@ Make fj usable by the developer on macOS with a local install, Forgejo Playgroun
 - [ ] #3 Read-only user acceptance succeeds for repository, issue, and pull request commands.
 - [ ] #4 Version and Quickstart guidance match the validated local workflow.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Decision — Parent Finalization:
+- Option A (Strict Completion) adopted.
+- TASK-10 cannot be marked Done while TASK-10.5 remains In Progress.
+- TASK-10.5 acceptance exception remains an explicit incomplete record; its unmet Acceptance Criteria are not marked passed.
+- TASK-10.5 is currently held by external Forgejo Playground permission/API constraints, not a confirmed fj code defect.
+- Next milestones must not be blocked solely by TASK-10 completion; independently executable follow-up milestones may proceed while TASK-10.5 awaits re-acceptance.
+<!-- SECTION:NOTES:END -->
