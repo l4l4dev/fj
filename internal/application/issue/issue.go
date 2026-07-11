@@ -20,12 +20,18 @@ type Issue struct {
 	State  State
 }
 
+type IssueFilter struct {
+	Assignee string
+	Label    string
+}
+
 type ListRequest struct {
-	Owner string
-	Name  string
-	Page  int
-	Limit int
-	State State
+	Owner  string
+	Name   string
+	Page   int
+	Limit  int
+	State  State
+	Filter IssueFilter
 }
 
 type Page struct {

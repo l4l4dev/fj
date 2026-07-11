@@ -1,10 +1,10 @@
 ---
 id: TASK-4.2
 title: Filter issue results
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-10 11:55'
-updated_date: '2026-07-10 14:17'
+updated_date: '2026-07-11 02:02'
 labels: []
 dependencies:
   - TASK-2.9
@@ -24,6 +24,32 @@ Intended scope: approximately 30-90 minutes.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Supported filter combinations are deterministic
-- [ ] #2 Invalid filter values are rejected locally
+- [x] #1 Supported filter combinations are deterministic
+- [x] #2 Invalid filter values are rejected locally
+- [x] #3 The CLI accepts a single --assignee USER or --label LABEL filter in addition to the existing --page, --limit, and --state open|closed|all flags.
+- [x] #4 Specifying both --assignee and --label, or repeating either filter, is rejected as a local validation error.
+- [x] #5 Application owns an IssueFilter value and does not expose Forgejo query parameter names.
+- [x] #6 Infrastructure maps IssueFilter.Assignee to assignee and IssueFilter.Label to labels in the Forgejo request.
+- [x] #7 Existing fj issue list OWNER/NAME behavior, output, exit codes, pagination, and state defaults remain compatible with TASK-4.1; filter values are not displayed.
+- [x] #8 Author, milestone, sort, keyword search, fetch-all, and JSON output remain out of scope.
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Add the Application-owned IssueFilter to the existing issue list request. 2. Add single-value assignee and label CLI flags with local validation while preserving TASK-4.1 behavior. 3. Map filters to Forgejo query parameters in the REST adapter. 4. Add regression and boundary tests, then run the full verification suite.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Approved filter contract: add single-value --assignee USER and --label LABEL filters while preserving --page, --limit, and --state open|closed|all. Only one filter may be specified per invocation; repeated assignee or label values are out of scope. Filter values are not shown in human-readable output. Existing TASK-4.1 command, output, and exit-code compatibility must remain unchanged. Application adds an IssueFilter value owned by the issue package; Forgejo query names do not cross the Application boundary. Infrastructure maps assignee to the assignee query and label to the labels query. Author, milestone, sort, keyword search, fetch-all, and JSON output are out of scope.
+
+Implemented IssueFilter with single-value --assignee and --label flags. Added local validation for empty, combined, and repeated filters; mapped assignee to assignee and label to labels in the Forgejo request; preserved TASK-4.1 output, pagination, state, exit-code, error-boundary, Presenter, and explicit DI behavior. Validation passed: gofmt -l ., git diff --check, go vet ./..., go test ./..., and make pre-commit (GOCACHE=/tmp/fj-gocache for sandbox compatibility).
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Completed TASK-4.2 filter support with Application-owned IssueFilter, assignee/label CLI flags, deterministic single-filter validation, and Forgejo query mapping. Existing TASK-4.1 behavior remains compatible and filter values are not rendered.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -32,3 +32,16 @@ func TestRESTAdapterList(t *testing.T) {
 		t.Fatalf("unexpected request: path=%s query=%v", transport.path, transport.query)
 	}
 }
+
+func TestRESTAdapterMapsIssueFilter(t *testing.T) {
+	transport := &stubTransport{body: `[]`}
+	_, err := NewRESTAdapter(transport).List(context.Background(), applicationissue.ListRequest{Owner: "alice", Name: "project", Page: 1, Limit: 30, State: applicationissue.StateOpen, Filter: applicationissue.IssueFilter{Assignee: "bob"}})
+	if err != nil || transport.query.Get("assignee") != "bob" || transport.query.Get("labels") != "" {
+		t.Fatalf("unexpected filter mapping: query=%v err=%v", transport.query, err)
+	}
+	transport.body = `[]`
+	_, err = NewRESTAdapter(transport).List(context.Background(), applicationissue.ListRequest{Owner: "alice", Name: "project", Page: 1, Limit: 30, State: applicationissue.StateOpen, Filter: applicationissue.IssueFilter{Label: "bug"}})
+	if err != nil || transport.query.Get("labels") != "bug" || transport.query.Get("assignee") != "" {
+		t.Fatalf("unexpected label mapping: query=%v err=%v", transport.query, err)
+	}
+}

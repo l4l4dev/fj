@@ -31,6 +31,12 @@ func (adapter *RESTAdapter) List(ctx context.Context, request applicationissue.L
 	query.Set("page", strconv.Itoa(request.Page))
 	query.Set("limit", strconv.Itoa(request.Limit))
 	query.Set("state", string(request.State))
+	if request.Filter.Assignee != "" {
+		query.Set("assignee", request.Filter.Assignee)
+	}
+	if request.Filter.Label != "" {
+		query.Set("labels", request.Filter.Label)
+	}
 	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues"
 	response, err := adapter.transport.Do(ctx, http.MethodGet, path, query)
 	if err != nil {

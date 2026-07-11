@@ -35,3 +35,13 @@ func TestIssueListRejectsInvalidState(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 }
+
+func TestIssueListRejectsCombinedAndRepeatedFilters(t *testing.T) {
+	for _, args := range [][]string{{"alice/project", "--assignee", "bob", "--label", "bug"}, {"alice/project", "--label", "bug", "--label", "feature"}} {
+		command := newIssueListCommand(issueListerStub{})
+		command.SetArgs(args)
+		if err := command.Execute(); err == nil {
+			t.Fatalf("expected validation error for args %v", args)
+		}
+	}
+}
