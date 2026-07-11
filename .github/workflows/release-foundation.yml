@@ -15,12 +15,12 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  resolve-version:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-
       - name: Resolve and validate version
         id: version
         env:
@@ -55,25 +55,43 @@ jobs:
             echo "tag=$version"
           } >> "$GITHUB_OUTPUT"
 
+  build:
+    needs: resolve-version
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: darwin
+            goarch: arm64
+          - goos: linux
+            goarch: amd64
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.26.5'
           cache: true
 
-      - name: Build release foundation artifact
+      - name: Build release artifact
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
         run: |
           set -eu
           mkdir -p dist
           go build \
             -ldflags "-X github.com/l4l4dev/fj/internal/version.Value=${VERSION}" \
-            -o "dist/fj-${VERSION}-linux-amd64" \
+            -o "dist/fj-${VERSION}-${GOOS}-${GOARCH}" \
             ./cmd/fj
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fj-${{ steps.version.outputs.version }}-linux-amd64
-          path: dist/fj-${{ steps.version.outputs.version }}-linux-amd64
+          name: fj-${{ needs.resolve-version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/fj-${{ needs.resolve-version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
