@@ -95,3 +95,60 @@ jobs:
         with:
           name: fj-${{ needs.resolve-version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/fj-${{ needs.resolve-version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+
+  checksums:
+    needs:
+      - resolve-version
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fj-${{ needs.resolve-version.outputs.version }}-*
+          path: dist
+          merge-multiple: true
+
+      - name: Generate and verify checksums
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          set -eu
+
+          darwin_binary="fj-${VERSION}-darwin-arm64"
+          linux_binary="fj-${VERSION}-linux-amd64"
+          checksum_file="fj-${VERSION}-checksums.txt"
+
+          test -f "dist/${darwin_binary}"
+          test -f "dist/${linux_binary}"
+          test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" -eq 2
+
+          (
+            cd dist
+            LC_ALL=C sha256sum \
+              "${darwin_binary}" \
+              "${linux_binary}" |
+              LC_ALL=C sort -k2
+          ) > "dist/${checksum_file}"
+
+          test "$(wc -l < "dist/${checksum_file}" | tr -d ' ')" -eq 2
+          awk -v darwin="${darwin_binary}" -v linux="${linux_binary}" '
+            NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ { exit 1 }
+            NR == 1 && $2 != darwin { exit 1 }
+            NR == 2 && $2 != linux { exit 1 }
+          ' "dist/${checksum_file}"
+
+          (
+            cd dist
+            sha256sum --check "${checksum_file}"
+          )
+
+      - name: Upload consolidated artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fj-${{ needs.resolve-version.outputs.version }}-artifacts
+          path: |
+            dist/fj-${{ needs.resolve-version.outputs.version }}-darwin-arm64
+            dist/fj-${{ needs.resolve-version.outputs.version }}-linux-amd64
+            dist/fj-${{ needs.resolve-version.outputs.version }}-checksums.txt
+          if-no-files-found: error
