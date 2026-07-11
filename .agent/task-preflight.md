@@ -24,6 +24,13 @@ If the Decision is not approved:
 - Stop and wait for human approval.
 - Proceed to implementation only after the Decision is approved.
 
+When the Decision is approved:
+
+- Continue to `.agent/implementation-plan.md` before implementation.
+- Do not start implementation unless the Implementation Plan has been created and reviewed for scope, boundaries, files, tests, and verification.
+- `.agent/decision-plan.md` records unresolved decisions for human approval.
+- `.agent/implementation-plan.md` translates the approved specification into an actionable implementation plan.
+
 ### Parent / Epic Task
 
 Conditions:

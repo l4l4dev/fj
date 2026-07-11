@@ -38,3 +38,12 @@
 
 - Approved / changes required / blocked:
 - Deferred work:
+
+## Human Decision
+
+- Finding:
+- Decision:
+  - Adopt
+  - Defer
+  - Reject
+- Comment:
