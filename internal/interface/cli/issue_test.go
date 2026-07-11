@@ -59,8 +59,27 @@ func TestIssueInspectOutput(t *testing.T) {
 	}
 }
 
+func TestIssueCreateUsesInspectOutput(t *testing.T) {
+	command := newIssueCreateCommand(creatorStubForCLI{detail: applicationissue.IssueDetail{Number: 13, Title: "Created", State: applicationissue.StateOpen}})
+	command.SetArgs([]string{"alice/project", "--title", "Created"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if want := "Issue: #13\nTitle: Created\nState: open\nBody: -\n"; output.String() != want {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+}
+
 type inspectorStubForCLI struct{ detail applicationissue.IssueDetail }
 
 func (stub inspectorStubForCLI) Inspect(context.Context, applicationissue.InspectRequest) (applicationissue.IssueDetail, error) {
+	return stub.detail, nil
+}
+
+type creatorStubForCLI struct{ detail applicationissue.IssueDetail }
+
+func (stub creatorStubForCLI) Create(context.Context, applicationissue.CreateRequest) (applicationissue.IssueDetail, error) {
 	return stub.detail, nil
 }

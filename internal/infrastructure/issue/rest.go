@@ -16,6 +16,10 @@ type transport interface {
 	Do(context.Context, string, string, url.Values) (*http.Response, error)
 }
 
+type jsonTransport interface {
+	DoJSON(context.Context, string, string, url.Values, []byte) (*http.Response, error)
+}
+
 type RESTAdapter struct{ transport transport }
 
 type forgejoIssue struct {
@@ -35,6 +39,35 @@ func (adapter *RESTAdapter) Inspect(ctx context.Context, request applicationissu
 	var decoded forgejoIssue
 	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
 		return applicationissue.IssueDetail{}, apperror.New(apperror.Remote, "inspect issue", "")
+	}
+	state := applicationissue.StateClosed
+	if decoded.State == string(applicationissue.StateOpen) {
+		state = applicationissue.StateOpen
+	}
+	return applicationissue.IssueDetail{Number: decoded.Number, Title: decoded.Title, State: state, Body: decoded.Body}, nil
+}
+
+func (adapter *RESTAdapter) Create(ctx context.Context, request applicationissue.CreateRequest) (applicationissue.IssueDetail, error) {
+	jsonClient, ok := adapter.transport.(jsonTransport)
+	if !ok {
+		return applicationissue.IssueDetail{}, apperror.New(apperror.Remote, "create issue", "")
+	}
+	body, err := json.Marshal(struct {
+		Title string `json:"title"`
+		Body  string `json:"body"`
+	}{Title: request.Title, Body: request.Body})
+	if err != nil {
+		return applicationissue.IssueDetail{}, apperror.New(apperror.Remote, "create issue", "")
+	}
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues"
+	response, err := jsonClient.DoJSON(ctx, http.MethodPost, path, nil, body)
+	if err != nil {
+		return applicationissue.IssueDetail{}, translateCreateError(err)
+	}
+	defer response.Body.Close()
+	var decoded forgejoIssue
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationissue.IssueDetail{}, apperror.New(apperror.Remote, "create issue", "")
 	}
 	state := applicationissue.StateClosed
 	if decoded.State == string(applicationissue.StateOpen) {
@@ -111,5 +144,26 @@ func translateInspectError(err error) error {
 	return apperror.New(apperror.Remote, "inspect issue", "")
 }
 
+func translateCreateError(err error) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		category := apperror.Remote
+		message := ""
+		switch status.StatusCode() {
+		case 401, 403:
+			category = apperror.Authentication
+		case 404:
+			category = apperror.NotFound
+			message = "repository not found"
+		case 409:
+			category = apperror.Conflict
+			message = "issue creation conflict"
+		}
+		return apperror.New(category, "create issue", message)
+	}
+	return apperror.New(apperror.Remote, "create issue", "")
+}
+
 var _ applicationissue.Lister = (*RESTAdapter)(nil)
 var _ applicationissue.Inspector = (*RESTAdapter)(nil)
+var _ applicationissue.Creator = (*RESTAdapter)(nil)

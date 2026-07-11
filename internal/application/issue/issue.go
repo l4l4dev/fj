@@ -62,6 +62,17 @@ type Inspector interface {
 	Inspect(context.Context, InspectRequest) (IssueDetail, error)
 }
 
+type CreateRequest struct {
+	Owner string
+	Name  string
+	Title string
+	Body  string
+}
+
+type Creator interface {
+	Create(context.Context, CreateRequest) (IssueDetail, error)
+}
+
 type ListUseCase struct{ lister Lister }
 
 func NewListUseCase(lister Lister) ListUseCase { return ListUseCase{lister: lister} }

@@ -9,10 +9,48 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.Inspector) *cobra.Command {
+func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.Inspector, creator applicationissue.Creator) *cobra.Command {
 	command := &cobra.Command{Use: "issue", Short: "Manage issues"}
 	command.AddCommand(newIssueListCommand(lister))
 	command.AddCommand(newIssueInspectCommand(inspector))
+	command.AddCommand(newIssueCreateCommand(creator))
+	return command
+}
+
+func newIssueCreateCommand(creator applicationissue.Creator) *cobra.Command {
+	var instance, title, body string
+	command := &cobra.Command{Use: "create OWNER/NAME", Short: "Create an issue", Args: func(command *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			return newCommandError(categoryValidation, "create issue", fmt.Errorf("OWNER/NAME is required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "create issue", err)
+		}
+		if strings.TrimSpace(title) == "" {
+			return newCommandError(categoryValidation, "create issue", fmt.Errorf("issue title is required"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if creator == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			creator = dependencies.IssueCreator
+			if creator == nil {
+				return newCommandError(categoryInternal, "create issue", fmt.Errorf("issue creator unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		result, err := applicationissue.NewCreateUseCase(creator).Execute(command.Context(), applicationissue.CreateRequest{Owner: parts[0], Name: parts[1], Title: title, Body: body})
+		if err != nil {
+			return mapApplicationError(err, "create issue")
+		}
+		return (issuePresenter{}).PresentInspect(command.OutOrStdout(), result)
+	}}
+	command.Flags().StringVar(&title, "title", "", "issue title")
+	command.Flags().StringVar(&body, "body", "", "issue body")
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 

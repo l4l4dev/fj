@@ -27,12 +27,13 @@ type RepositoryDependencies struct {
 	Access         applicationrepository.AccessViewer
 	Issues         applicationissue.Lister
 	IssueInspector applicationissue.Inspector
+	IssueCreator   applicationissue.Creator
 }
 
 func NewRootCommandWithDependencies(dependencies RepositoryDependencies) *cobra.Command {
 	command := &cobra.Command{Use: "fj", Short: "AI-first CLI for Forgejo", Args: cobra.NoArgs, SilenceErrors: true, SilenceUsage: true, RunE: func(command *cobra.Command, _ []string) error { return command.Help() }}
 	command.AddCommand(newRepositoryCommand(dependencies))
-	command.AddCommand(newIssueCommand(dependencies.Issues, dependencies.IssueInspector))
+	command.AddCommand(newIssueCommand(dependencies.Issues, dependencies.IssueInspector, dependencies.IssueCreator))
 	command.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return newCommandError(categoryValidation, "execute command", err)
 	})
@@ -78,7 +79,7 @@ func composeRepositoryDependencies(ctx context.Context, instanceName string) (Re
 	}
 	adapter := infrastructurerepository.NewRESTAdapter(forgejo.NewClient(instance, credential, "dev", nil))
 	issueAdapter := infrastructureissue.NewRESTAdapter(forgejo.NewClient(instance, credential, "dev", nil))
-	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter, Issues: issueAdapter, IssueInspector: issueAdapter}, nil
+	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter, Issues: issueAdapter, IssueInspector: issueAdapter, IssueCreator: issueAdapter}, nil
 }
 
 func mapApplicationError(err error, operation string) error {
