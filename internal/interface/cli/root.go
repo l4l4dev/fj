@@ -21,33 +21,34 @@ import (
 func NewRootCommand() *cobra.Command { return NewRootCommandWithDependencies(RepositoryDependencies{}) }
 
 type RepositoryDependencies struct {
-	List              applicationrepository.Service
-	Inspect           applicationrepository.Getter
-	Create            applicationrepository.Creator
-	Update            applicationrepository.Updater
-	Archive           applicationrepository.Archiver
-	Access            applicationrepository.AccessViewer
-	Issues            applicationissue.Lister
-	IssueInspector    applicationissue.Inspector
-	IssueCreator      applicationissue.Creator
-	IssueUpdater      applicationissue.Updater
-	IssueStateChanger applicationissue.StateChanger
-	CommentViewer     applicationissue.CommentViewer
-	CommentCreator    applicationissue.CommentCreator
-	LabelAdder        applicationissue.LabelAdder
-	LabelRemover      applicationissue.LabelRemover
-	MilestoneSetter   applicationissue.MilestoneSetter
-	MilestoneClearer  applicationissue.MilestoneClearer
-	Assigner          applicationissue.Assigner
-	Unassigner        applicationissue.Unassigner
-	PullRequests      applicationpullrequest.PullRequestLister
+	List                 applicationrepository.Service
+	Inspect              applicationrepository.Getter
+	Create               applicationrepository.Creator
+	Update               applicationrepository.Updater
+	Archive              applicationrepository.Archiver
+	Access               applicationrepository.AccessViewer
+	Issues               applicationissue.Lister
+	IssueInspector       applicationissue.Inspector
+	IssueCreator         applicationissue.Creator
+	IssueUpdater         applicationissue.Updater
+	IssueStateChanger    applicationissue.StateChanger
+	CommentViewer        applicationissue.CommentViewer
+	CommentCreator       applicationissue.CommentCreator
+	LabelAdder           applicationissue.LabelAdder
+	LabelRemover         applicationissue.LabelRemover
+	MilestoneSetter      applicationissue.MilestoneSetter
+	MilestoneClearer     applicationissue.MilestoneClearer
+	Assigner             applicationissue.Assigner
+	Unassigner           applicationissue.Unassigner
+	PullRequests         applicationpullrequest.PullRequestLister
+	PullRequestInspector applicationpullrequest.PullRequestInspector
 }
 
 func NewRootCommandWithDependencies(dependencies RepositoryDependencies) *cobra.Command {
 	command := &cobra.Command{Use: "fj", Short: "AI-first CLI for Forgejo", Args: cobra.NoArgs, SilenceErrors: true, SilenceUsage: true, RunE: func(command *cobra.Command, _ []string) error { return command.Help() }}
 	command.AddCommand(newRepositoryCommand(dependencies))
 	command.AddCommand(newIssueCommand(dependencies.Issues, dependencies.IssueInspector, dependencies.IssueCreator, dependencies.IssueUpdater, dependencies.IssueStateChanger, dependencies.CommentViewer, dependencies.CommentCreator, dependencies.LabelAdder, dependencies.LabelRemover, dependencies.MilestoneSetter, dependencies.MilestoneClearer, dependencies.Assigner, dependencies.Unassigner))
-	command.AddCommand(newPullRequestCommand(dependencies.PullRequests))
+	command.AddCommand(newPullRequestCommandWithInspector(dependencies.PullRequests, dependencies.PullRequestInspector))
 	command.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return newCommandError(categoryValidation, "execute command", err)
 	})
@@ -94,7 +95,7 @@ func composeRepositoryDependencies(ctx context.Context, instanceName string) (Re
 	adapter := infrastructurerepository.NewRESTAdapter(forgejo.NewClient(instance, credential, "dev", nil))
 	issueAdapter := infrastructureissue.NewRESTAdapter(forgejo.NewClient(instance, credential, "dev", nil))
 	pullRequestAdapter := infrastructurerpullrequest.NewRESTAdapter(forgejo.NewClient(instance, credential, "dev", nil))
-	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter, Issues: issueAdapter, IssueInspector: issueAdapter, IssueCreator: issueAdapter, IssueUpdater: issueAdapter, IssueStateChanger: issueAdapter, CommentViewer: issueAdapter, CommentCreator: issueAdapter, LabelAdder: issueAdapter, LabelRemover: issueAdapter, MilestoneSetter: issueAdapter, MilestoneClearer: issueAdapter, Assigner: issueAdapter, Unassigner: issueAdapter, PullRequests: pullRequestAdapter}, nil
+	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter, Issues: issueAdapter, IssueInspector: issueAdapter, IssueCreator: issueAdapter, IssueUpdater: issueAdapter, IssueStateChanger: issueAdapter, CommentViewer: issueAdapter, CommentCreator: issueAdapter, LabelAdder: issueAdapter, LabelRemover: issueAdapter, MilestoneSetter: issueAdapter, MilestoneClearer: issueAdapter, Assigner: issueAdapter, Unassigner: issueAdapter, PullRequests: pullRequestAdapter, PullRequestInspector: pullRequestAdapter}, nil
 }
 
 func mapApplicationError(err error, operation string) error {

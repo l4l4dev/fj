@@ -39,3 +39,14 @@ func TestRESTAdapterListEmpty(t *testing.T) {
 		t.Fatalf("unexpected empty result: %#v err=%v", result, err)
 	}
 }
+
+func TestRESTAdapterInspect(t *testing.T) {
+	transport := &stubTransport{body: `{"number":12,"title":"Improve flow","state":"open","body":"Details","head":{"ref":"feature"},"base":{"ref":"main"}}`}
+	result, err := NewRESTAdapter(transport).Inspect(context.Background(), applicationpullrequest.InspectRequest{Owner: "alice", Name: "project", Number: 12})
+	if err != nil || result.Number != 12 || result.Body != "Details" || result.HeadBranch != "feature" || result.BaseBranch != "main" {
+		t.Fatalf("unexpected result: %+v err=%v", result, err)
+	}
+	if transport.path != "/api/v1/repos/alice/project/pulls/12" {
+		t.Fatalf("unexpected path: %s", transport.path)
+	}
+}

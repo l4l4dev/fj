@@ -18,6 +18,15 @@ type PullRequest struct {
 	BaseBranch string
 }
 
+type PullRequestDetail struct {
+	Number     int
+	Title      string
+	State      State
+	HeadBranch string
+	BaseBranch string
+	Body       string
+}
+
 type ListRequest struct {
 	Owner string
 	Name  string
@@ -28,4 +37,14 @@ type ListRequest struct {
 
 type PullRequestLister interface {
 	List(context.Context, ListRequest) ([]PullRequest, error)
+}
+
+type InspectRequest struct {
+	Owner  string
+	Name   string
+	Number int
+}
+
+type PullRequestInspector interface {
+	Inspect(context.Context, InspectRequest) (PullRequestDetail, error)
 }

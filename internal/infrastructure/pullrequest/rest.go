@@ -30,6 +30,19 @@ type forgejoPullRequest struct {
 	} `json:"base"`
 }
 
+type forgejoPullRequestDetail struct {
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	State  string `json:"state"`
+	Body   string `json:"body"`
+	Head   struct {
+		Ref string `json:"ref"`
+	} `json:"head"`
+	Base struct {
+		Ref string `json:"ref"`
+	} `json:"base"`
+}
+
 func NewRESTAdapter(t transport) *RESTAdapter { return &RESTAdapter{transport: t} }
 
 func (a *RESTAdapter) List(ctx context.Context, request applicationpullrequest.ListRequest) ([]applicationpullrequest.PullRequest, error) {
@@ -55,6 +68,20 @@ func (a *RESTAdapter) List(ctx context.Context, request applicationpullrequest.L
 	return result, nil
 }
 
+func (a *RESTAdapter) Inspect(ctx context.Context, request applicationpullrequest.InspectRequest) (applicationpullrequest.PullRequestDetail, error) {
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/pulls/" + strconv.Itoa(request.Number)
+	response, err := a.transport.Do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return applicationpullrequest.PullRequestDetail{}, translateInspectError(err)
+	}
+	defer response.Body.Close()
+	var decoded forgejoPullRequestDetail
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationpullrequest.PullRequestDetail{}, apperror.New(apperror.Remote, "inspect pull request", "")
+	}
+	return applicationpullrequest.PullRequestDetail{Number: decoded.Number, Title: decoded.Title, State: applicationpullrequest.State(decoded.State), HeadBranch: decoded.Head.Ref, BaseBranch: decoded.Base.Ref, Body: decoded.Body}, nil
+}
+
 func translateError(err error) error {
 	var status interface{ StatusCode() int }
 	if errors.As(err, &status) && (status.StatusCode() == 401 || status.StatusCode() == 403) {
@@ -63,4 +90,18 @@ func translateError(err error) error {
 	return apperror.New(apperror.Remote, "list pull requests", "")
 }
 
+func translateInspectError(err error) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		switch status.StatusCode() {
+		case 401, 403:
+			return apperror.New(apperror.Authentication, "inspect pull request", "")
+		case 404:
+			return apperror.New(apperror.NotFound, "inspect pull request", "pull request not found")
+		}
+	}
+	return apperror.New(apperror.Remote, "inspect pull request", "")
+}
+
 var _ applicationpullrequest.PullRequestLister = (*RESTAdapter)(nil)
+var _ applicationpullrequest.PullRequestInspector = (*RESTAdapter)(nil)

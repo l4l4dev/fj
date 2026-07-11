@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	applicationpullrequest "github.com/l4l4dev/fj/internal/application/pullrequest"
@@ -9,8 +10,50 @@ import (
 )
 
 func newPullRequestCommand(lister applicationpullrequest.PullRequestLister) *cobra.Command {
+	return newPullRequestCommandWithInspector(lister, nil)
+}
+
+func newPullRequestCommandWithInspector(lister applicationpullrequest.PullRequestLister, inspector applicationpullrequest.PullRequestInspector) *cobra.Command {
 	command := &cobra.Command{Use: "pr", Short: "Manage pull requests"}
 	command.AddCommand(newPullRequestListCommand(lister))
+	command.AddCommand(newPullRequestInspectCommand(inspector))
+	return command
+}
+
+func newPullRequestInspectCommand(inspector applicationpullrequest.PullRequestInspector) *cobra.Command {
+	var instance string
+	command := &cobra.Command{Use: "inspect OWNER/NAME NUMBER", Short: "Inspect a pull request", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 2 {
+			return newCommandError(categoryValidation, "inspect pull request", fmt.Errorf("OWNER/NAME and pull request number are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "inspect pull request", err)
+		}
+		number, err := strconv.Atoi(args[1])
+		if err != nil || number < 1 {
+			return newCommandError(categoryValidation, "inspect pull request", fmt.Errorf("pull request number must be a positive integer"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if inspector == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			inspector = dependencies.PullRequestInspector
+			if inspector == nil {
+				return newCommandError(categoryInternal, "inspect pull request", fmt.Errorf("pull request inspector unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		result, err := applicationpullrequest.NewInspectUseCase(inspector).Execute(command.Context(), applicationpullrequest.InspectRequest{Owner: parts[0], Name: parts[1], Number: number})
+		if err != nil {
+			return mapApplicationError(err, "inspect pull request")
+		}
+		return (pullRequestPresenter{}).PresentInspect(command.OutOrStdout(), result)
+	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 
