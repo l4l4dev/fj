@@ -82,3 +82,36 @@ Instance selection uses this precedence:
 2. The only configured profile when no profile is explicitly requested.
 
 Selection fails when an explicitly requested profile does not exist or when multiple profiles are configured without an explicit selection.
+
+## Configuration onboarding
+
+The configuration file is loaded from the XDG config location:
+
+- `$XDG_CONFIG_HOME/fj/config.toml` when `XDG_CONFIG_HOME` is set.
+- `$HOME/.config/fj/config.toml` otherwise.
+
+Define instance profiles with the following TOML schema. The endpoint below is
+a placeholder; do not replace it with a real credential-bearing URL in
+documentation.
+
+```toml
+[[instances]]
+name = "playground"
+endpoint = "https://forgejo-playground.example"
+credential = "FORGEJO_PLAYGROUND_TOKEN"
+```
+
+The `credential` field contains only the name of an environment variable. Set
+the credential value in the environment; never put the token itself in
+`config.toml` or documentation:
+
+```bash
+export FORGEJO_PLAYGROUND_TOKEN="<token-not-shown>"
+```
+
+Use `--instance playground` to select the profile explicitly. With exactly one
+configured profile, `--instance` may be omitted. When multiple profiles are
+configured, an explicit `--instance` is required.
+
+Credential values, raw tokens, and credentials embedded in URLs must not be
+printed in command output, error messages, logs, or examples.
