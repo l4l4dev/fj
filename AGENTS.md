@@ -83,6 +83,21 @@ Approval for one task or phase does not imply approval for another.
 - Maintain backward compatibility unless an incompatible change is explicitly approved.
 - Do not expose secrets, credentials, personal data, or non-public information.
 
+## Repository Privacy and Recording Hygiene
+
+- In Git history, commit messages, Backlog tasks, README, documentation, and
+  `.agent` records, use placeholders instead of real personal names,
+  organization names, hostnames, or repository owner names by default.
+- Even externally published information may be recorded only with explicit
+  user approval or a clearly authorized publication purpose.
+- Use these placeholders in execution, verification, and acceptance records:
+  - `example-owner`
+  - `example-repository`
+  - `https://forgejo.example.com`
+- Never record credential values, raw tokens, or credentials embedded in URLs.
+- Git history rewriting, force-push, and privacy cleanup are prohibited unless
+  covered by a separately approved task.
+
 ## 9. Testing Rules
 
 - Add or update tests for every behavior change.

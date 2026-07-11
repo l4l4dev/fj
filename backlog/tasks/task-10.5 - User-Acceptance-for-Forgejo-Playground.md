@@ -4,13 +4,13 @@ title: User Acceptance for Forgejo Playground
 status: To Do
 assignee: []
 created_date: '2026-07-11 09:09'
-updated_date: '2026-07-11 09:16'
+updated_date: '2026-07-11 09:38'
 labels: []
 dependencies:
   - TASK-10.3
 parent_task_id: TASK-10
 priority: high
-ordinal: 10030
+ordinal: 10010
 ---
 
 ## Description

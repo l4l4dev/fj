@@ -5,13 +5,13 @@ status: To Do
 assignee:
   - '@codex'
 created_date: '2026-07-11 09:08'
-updated_date: '2026-07-11 09:16'
+updated_date: '2026-07-11 09:38'
 labels: []
 dependencies:
   - TASK-10.5
 parent_task_id: TASK-10
 priority: medium
-ordinal: 10040
+ordinal: 10030
 ---
 
 ## Description

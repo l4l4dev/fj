@@ -4,14 +4,14 @@ title: Public CLI Quickstart
 status: To Do
 assignee: []
 created_date: '2026-07-11 09:09'
-updated_date: '2026-07-11 09:13'
+updated_date: '2026-07-11 09:38'
 labels: []
 dependencies:
   - TASK-10.1
   - TASK-10.5
 parent_task_id: TASK-10
 priority: medium
-ordinal: 10050
+ordinal: 10040
 ---
 
 ## Description

@@ -28,6 +28,23 @@ Before implementation:
 Record the selected task, selection reason, model and rationale, readiness decision,
 and planned files in the task or work report.
 
+### Privacy-safe records
+
+Use placeholders instead of real personal names, organization names, hostnames,
+or repository owner names in execution, verification, acceptance, and review
+records by default. Even externally published information requires explicit
+user approval or a clearly authorized publication purpose before being recorded.
+
+Use:
+
+- `example-owner`
+- `example-repository`
+- `https://forgejo.example.com`
+
+Never record credential values, raw tokens, or credentials embedded in URLs.
+Git history rewriting, force-push, and privacy cleanup require a separately
+approved task and must not be performed as part of the current workflow.
+
 ## 1. Task selection
 
 Select one executable task from Backlog according to status, dependencies,
