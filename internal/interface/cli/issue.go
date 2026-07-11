@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.Inspector, creator applicationissue.Creator, updater applicationissue.Updater, stateChanger applicationissue.StateChanger, commentViewer applicationissue.CommentViewer, commentCreator applicationissue.CommentCreator) *cobra.Command {
+func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.Inspector, creator applicationissue.Creator, updater applicationissue.Updater, stateChanger applicationissue.StateChanger, commentViewer applicationissue.CommentViewer, commentCreator applicationissue.CommentCreator, labelAdder applicationissue.LabelAdder, labelRemover applicationissue.LabelRemover) *cobra.Command {
 	command := &cobra.Command{Use: "issue", Short: "Manage issues"}
 	command.AddCommand(newIssueListCommand(lister))
 	command.AddCommand(newIssueInspectCommand(inspector))
@@ -17,6 +17,80 @@ func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.
 	command.AddCommand(newIssueUpdateCommand(updater))
 	command.AddCommand(newIssueStateCommand(stateChanger))
 	command.AddCommand(newIssueCommentCommand(commentViewer, commentCreator))
+	command.AddCommand(newIssueLabelCommand(labelAdder, labelRemover))
+	return command
+}
+
+func newIssueLabelCommand(adder applicationissue.LabelAdder, remover applicationissue.LabelRemover) *cobra.Command {
+	command := &cobra.Command{Use: "label", Short: "Manage issue labels"}
+	command.AddCommand(newIssueLabelAddCommand(adder))
+	command.AddCommand(newIssueLabelRemoveCommand(remover))
+	return command
+}
+
+func newIssueLabelAddCommand(adder applicationissue.LabelAdder) *cobra.Command {
+	return newIssueLabelMutationCommand("add", "add issue label", adder, nil)
+}
+
+func newIssueLabelRemoveCommand(remover applicationissue.LabelRemover) *cobra.Command {
+	return newIssueLabelMutationCommand("remove", "remove issue label", nil, remover)
+}
+
+func newIssueLabelMutationCommand(name, operation string, adder applicationissue.LabelAdder, remover applicationissue.LabelRemover) *cobra.Command {
+	var instance string
+	command := &cobra.Command{Use: name + " OWNER/NAME NUMBER LABEL", Short: operation, Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 3 {
+			return newCommandError(categoryValidation, operation, fmt.Errorf("OWNER/NAME, issue number, and label are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, operation, err)
+		}
+		number, err := strconv.Atoi(args[1])
+		if err != nil || number < 1 {
+			return newCommandError(categoryValidation, operation, fmt.Errorf("issue number must be a positive integer"))
+		}
+		if strings.TrimSpace(args[2]) == "" {
+			return newCommandError(categoryValidation, operation, fmt.Errorf("label is required"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		number, _ := strconv.Atoi(args[1])
+		if name == "add" {
+			if adder == nil {
+				dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+				if err != nil {
+					return err
+				}
+				adder = dependencies.LabelAdder
+				if adder == nil {
+					return newCommandError(categoryInternal, operation, fmt.Errorf("label adder unavailable"))
+				}
+			}
+			parts := strings.SplitN(args[0], "/", 2)
+			label, err := applicationissue.NewAddLabelUseCase(adder).Execute(command.Context(), applicationissue.AddLabelRequest{Owner: parts[0], Name: parts[1], Number: number, Label: args[2]})
+			if err != nil {
+				return mapApplicationError(err, operation)
+			}
+			return (issuePresenter{}).PresentLabelAdded(command.OutOrStdout(), number, label)
+		}
+		if remover == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			remover = dependencies.LabelRemover
+			if remover == nil {
+				return newCommandError(categoryInternal, operation, fmt.Errorf("label remover unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		label, err := applicationissue.NewRemoveLabelUseCase(remover).Execute(command.Context(), applicationissue.RemoveLabelRequest{Owner: parts[0], Name: parts[1], Number: number, Label: args[2]})
+		if err != nil {
+			return mapApplicationError(err, operation)
+		}
+		return (issuePresenter{}).PresentLabelRemoved(command.OutOrStdout(), number, label)
+	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 

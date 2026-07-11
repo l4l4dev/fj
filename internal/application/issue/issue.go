@@ -122,6 +122,33 @@ type CommentCreator interface {
 	AddComment(context.Context, AddCommentRequest) (Comment, error)
 }
 
+type Label struct {
+	ID   int64
+	Name string
+}
+
+type AddLabelRequest struct {
+	Owner  string
+	Name   string
+	Number int
+	Label  string
+}
+
+type RemoveLabelRequest struct {
+	Owner  string
+	Name   string
+	Number int
+	Label  string
+}
+
+type LabelAdder interface {
+	AddLabel(context.Context, AddLabelRequest) (Label, error)
+}
+
+type LabelRemover interface {
+	RemoveLabel(context.Context, RemoveLabelRequest) (Label, error)
+}
+
 type ListUseCase struct{ lister Lister }
 
 func NewListUseCase(lister Lister) ListUseCase { return ListUseCase{lister: lister} }

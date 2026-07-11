@@ -10,6 +10,16 @@ import (
 
 type issuePresenter struct{}
 
+func (issuePresenter) PresentLabelAdded(w io.Writer, number int, label applicationissue.Label) error {
+	_, err := fmt.Fprintf(w, "Issue: #%d\nLabel added: %s\n", number, label.Name)
+	return err
+}
+
+func (issuePresenter) PresentLabelRemoved(w io.Writer, number int, label applicationissue.Label) error {
+	_, err := fmt.Fprintf(w, "Issue: #%d\nLabel removed: %s\n", number, label.Name)
+	return err
+}
+
 func (issuePresenter) PresentComments(w io.Writer, comments []applicationissue.Comment) error {
 	if _, err := fmt.Fprintln(w, "Comments:"); err != nil {
 		return err

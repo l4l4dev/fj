@@ -34,6 +34,11 @@ type forgejoComment struct {
 	Body string `json:"body"`
 }
 
+type forgejoLabel struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
 func (adapter *RESTAdapter) Inspect(ctx context.Context, request applicationissue.InspectRequest) (applicationissue.IssueDetail, error) {
 	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues/" + strconv.Itoa(request.Number)
 	response, err := adapter.transport.Do(ctx, http.MethodGet, path, nil)
@@ -184,6 +189,86 @@ func (adapter *RESTAdapter) AddComment(ctx context.Context, request applicationi
 	return applicationissue.Comment{ID: decoded.ID, Body: decoded.Body}, nil
 }
 
+func (adapter *RESTAdapter) AddLabel(ctx context.Context, request applicationissue.AddLabelRequest) (applicationissue.Label, error) {
+	labels, err := adapter.issueLabels(ctx, request.Owner, request.Name, request.Number)
+	if err != nil {
+		return applicationissue.Label{}, err
+	}
+	for _, label := range labels {
+		if label.Name == request.Label {
+			return label, nil
+		}
+	}
+	jsonClient, ok := adapter.transport.(jsonTransport)
+	if !ok {
+		return applicationissue.Label{}, apperror.New(apperror.Remote, "add issue label", "")
+	}
+	body, err := json.Marshal(struct {
+		Labels []string `json:"labels"`
+	}{Labels: []string{request.Label}})
+	if err != nil {
+		return applicationissue.Label{}, apperror.New(apperror.Remote, "add issue label", "")
+	}
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues/" + strconv.Itoa(request.Number) + "/labels"
+	response, err := jsonClient.DoJSON(ctx, http.MethodPost, path, nil, body)
+	if err != nil {
+		return applicationissue.Label{}, translateLabelError(err, "add issue label")
+	}
+	defer response.Body.Close()
+	var decoded []forgejoLabel
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationissue.Label{}, apperror.New(apperror.Remote, "add issue label", "")
+	}
+	for _, label := range decoded {
+		if label.Name == request.Label {
+			return applicationissue.Label{ID: label.ID, Name: label.Name}, nil
+		}
+	}
+	return applicationissue.Label{}, apperror.New(apperror.Remote, "add issue label", "")
+}
+
+func (adapter *RESTAdapter) RemoveLabel(ctx context.Context, request applicationissue.RemoveLabelRequest) (applicationissue.Label, error) {
+	labels, err := adapter.issueLabels(ctx, request.Owner, request.Name, request.Number)
+	if err != nil {
+		return applicationissue.Label{}, err
+	}
+	var target applicationissue.Label
+	for _, label := range labels {
+		if label.Name == request.Label {
+			target = label
+			break
+		}
+	}
+	if target.Name == "" {
+		return applicationissue.Label{Name: request.Label}, nil
+	}
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues/" + strconv.Itoa(request.Number) + "/labels/" + strconv.FormatInt(target.ID, 10)
+	response, err := adapter.transport.Do(ctx, http.MethodDelete, path, nil)
+	if err != nil {
+		return applicationissue.Label{}, translateLabelError(err, "remove issue label")
+	}
+	defer response.Body.Close()
+	return target, nil
+}
+
+func (adapter *RESTAdapter) issueLabels(ctx context.Context, owner, name string, number int) ([]applicationissue.Label, error) {
+	path := "/api/v1/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(name) + "/issues/" + strconv.Itoa(number) + "/labels"
+	response, err := adapter.transport.Do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, translateLabelError(err, "resolve issue labels")
+	}
+	defer response.Body.Close()
+	var decoded []forgejoLabel
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return nil, apperror.New(apperror.Remote, "resolve issue labels", "")
+	}
+	labels := make([]applicationissue.Label, 0, len(decoded))
+	for _, label := range decoded {
+		labels = append(labels, applicationissue.Label{ID: label.ID, Name: label.Name})
+	}
+	return labels, nil
+}
+
 func NewRESTAdapter(transport transport) *RESTAdapter { return &RESTAdapter{transport: transport} }
 
 func (adapter *RESTAdapter) List(ctx context.Context, request applicationissue.ListRequest) (applicationissue.Page, error) {
@@ -329,6 +414,23 @@ func translateCommentError(err error, operation string) error {
 	return apperror.New(apperror.Remote, operation, "")
 }
 
+func translateLabelError(err error, operation string) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		category := apperror.Remote
+		message := ""
+		switch status.StatusCode() {
+		case 401, 403:
+			category = apperror.Authentication
+		case 404:
+			category = apperror.NotFound
+			message = "issue not found"
+		}
+		return apperror.New(category, operation, message)
+	}
+	return apperror.New(apperror.Remote, operation, "")
+}
+
 var _ applicationissue.Lister = (*RESTAdapter)(nil)
 var _ applicationissue.Inspector = (*RESTAdapter)(nil)
 var _ applicationissue.Creator = (*RESTAdapter)(nil)
@@ -336,3 +438,5 @@ var _ applicationissue.Updater = (*RESTAdapter)(nil)
 var _ applicationissue.StateChanger = (*RESTAdapter)(nil)
 var _ applicationissue.CommentViewer = (*RESTAdapter)(nil)
 var _ applicationissue.CommentCreator = (*RESTAdapter)(nil)
+var _ applicationissue.LabelAdder = (*RESTAdapter)(nil)
+var _ applicationissue.LabelRemover = (*RESTAdapter)(nil)

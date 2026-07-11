@@ -121,6 +121,29 @@ func TestIssueCommentOutputs(t *testing.T) {
 	}
 }
 
+func TestIssueLabelOutputs(t *testing.T) {
+	add := newIssueLabelAddCommand(labelAdderStubForCLI{label: applicationissue.Label{Name: "bug"}})
+	add.SetArgs([]string{"alice/project", "12", "bug"})
+	var addOutput strings.Builder
+	add.SetOut(&addOutput)
+	if err := add.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if want := "Issue: #12\nLabel added: bug\n"; addOutput.String() != want {
+		t.Fatalf("unexpected add label output: %q", addOutput.String())
+	}
+	remove := newIssueLabelRemoveCommand(labelRemoverStubForCLI{label: applicationissue.Label{Name: "bug"}})
+	remove.SetArgs([]string{"alice/project", "12", "bug"})
+	var removeOutput strings.Builder
+	remove.SetOut(&removeOutput)
+	if err := remove.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if want := "Issue: #12\nLabel removed: bug\n"; removeOutput.String() != want {
+		t.Fatalf("unexpected remove label output: %q", removeOutput.String())
+	}
+}
+
 type commentViewerStubForCLI struct{ comments []applicationissue.Comment }
 
 func (stub commentViewerStubForCLI) ListComments(context.Context, applicationissue.ListCommentsRequest) ([]applicationissue.Comment, error) {
@@ -131,6 +154,18 @@ type commentCreatorStubForCLI struct{ comment applicationissue.Comment }
 
 func (stub commentCreatorStubForCLI) AddComment(context.Context, applicationissue.AddCommentRequest) (applicationissue.Comment, error) {
 	return stub.comment, nil
+}
+
+type labelAdderStubForCLI struct{ label applicationissue.Label }
+
+func (stub labelAdderStubForCLI) AddLabel(context.Context, applicationissue.AddLabelRequest) (applicationissue.Label, error) {
+	return stub.label, nil
+}
+
+type labelRemoverStubForCLI struct{ label applicationissue.Label }
+
+func (stub labelRemoverStubForCLI) RemoveLabel(context.Context, applicationissue.RemoveLabelRequest) (applicationissue.Label, error) {
+	return stub.label, nil
 }
 
 type inspectorStubForCLI struct{ detail applicationissue.IssueDetail }

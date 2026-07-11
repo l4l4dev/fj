@@ -19,13 +19,23 @@ type stubTransport struct {
 
 type jsonStubTransport struct {
 	stubTransport
-	method string
-	body   []byte
+	method       string
+	body         []byte
+	responseBody string
+}
+
+func (stub *jsonStubTransport) Do(_ context.Context, method, path string, _ url.Values) (*http.Response, error) {
+	stub.method, stub.path = method, path
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(stub.stubTransport.body))}, nil
 }
 
 func (stub *jsonStubTransport) DoJSON(_ context.Context, method, path string, _ url.Values, body []byte) (*http.Response, error) {
 	stub.method, stub.path, stub.body = method, path, body
-	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"number":13,"title":"Created","state":"open","body":"Body"}`))}, nil
+	response := stub.responseBody
+	if response == "" {
+		response = `{"number":13,"title":"Created","state":"open","body":"Body"}`
+	}
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(response))}, nil
 }
 
 func (stub *stubTransport) Do(_ context.Context, _ string, path string, query url.Values) (*http.Response, error) {
@@ -120,5 +130,21 @@ func TestRESTAdapterComments(t *testing.T) {
 	}
 	if string(jsonTransport.body) != `{"body":"hello"}` {
 		t.Fatalf("unexpected comment body: %s", jsonTransport.body)
+	}
+}
+
+func TestRESTAdapterLabels(t *testing.T) {
+	transport := &jsonStubTransport{}
+	transport.stubTransport.body = `[]`
+	transport.responseBody = `[{"id":42,"name":"bug"}]`
+	label, err := NewRESTAdapter(transport).AddLabel(context.Background(), applicationissue.AddLabelRequest{Owner: "alice", Name: "project", Number: 12, Label: "bug"})
+	if err != nil || label.ID != 42 || label.Name != "bug" || transport.method != http.MethodPost || transport.path != "/api/v1/repos/alice/project/issues/12/labels" || string(transport.body) != `{"labels":["bug"]}` {
+		t.Fatalf("unexpected add label: %+v method=%s path=%s body=%s err=%v", label, transport.method, transport.path, transport.body, err)
+	}
+	transport.stubTransport.body = `[{"id":42,"name":"bug"}]`
+	transport.method, transport.path, transport.body = "", "", nil
+	label, err = NewRESTAdapter(transport).RemoveLabel(context.Background(), applicationissue.RemoveLabelRequest{Owner: "alice", Name: "project", Number: 12, Label: "bug"})
+	if err != nil || label.ID != 42 || transport.method != http.MethodDelete || transport.path != "/api/v1/repos/alice/project/issues/12/labels/42" {
+		t.Fatalf("unexpected remove label: %+v method=%s path=%s err=%v", label, transport.method, transport.path, err)
 	}
 }
