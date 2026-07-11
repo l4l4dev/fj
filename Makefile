@@ -1,4 +1,7 @@
-.PHONY: fmt check-fmt vet test build verify pre-commit
+.PHONY: fmt check-fmt vet test build install uninstall verify pre-commit
+
+INSTALL_DIR ?= $(HOME)/.local/bin
+INSTALL_PATH := $(INSTALL_DIR)/fj
 
 fmt:
 	go fmt ./...
@@ -14,6 +17,13 @@ test:
 
 build:
 	go build ./...
+
+install:
+	mkdir -p "$(INSTALL_DIR)"
+	go build -o "$(INSTALL_PATH)" ./cmd/fj
+
+uninstall:
+	rm -f "$(INSTALL_PATH)"
 
 verify: check-fmt
 	git diff --check

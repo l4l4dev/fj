@@ -4,14 +4,15 @@ title: Merge or close a pull request
 status: To Do
 assignee: []
 created_date: '2026-07-10 11:55'
-updated_date: '2026-07-10 14:17'
+updated_date: '2026-07-11 09:13'
 labels: []
 dependencies:
   - TASK-2.9
 references:
   - ROADMAP.md
 parent_task_id: TASK-5
-ordinal: 45000
+priority: low
+ordinal: 40020
 ---
 
 ## Description

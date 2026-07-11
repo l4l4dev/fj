@@ -23,6 +23,44 @@ The shared development commands are provided by the repository `Makefile`:
 - `make verify` runs formatting, whitespace, vet, and test checks.
 - `make pre-commit` runs the complete pre-commit verification.
 
+## Install on macOS
+
+Install `fj` for the current user without `sudo`:
+
+```bash
+make install
+```
+
+The binary is installed at `$HOME/.local/bin/fj`. The install target does not
+modify `PATH` or shell configuration.
+
+Check whether the install directory is already on `PATH`:
+
+```bash
+command -v fj
+```
+
+If no path is printed, add the directory to your shell configuration. For zsh:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Confirm the installation:
+
+```bash
+fj --help
+```
+
+Remove only the installed binary with:
+
+```bash
+make uninstall
+```
+
+This does not remove configuration files, credentials, or shell settings.
+
 ## Command behavior
 
 - `fj` and `fj --help` print root help to standard output and exit successfully.

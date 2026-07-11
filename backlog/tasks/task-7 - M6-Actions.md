@@ -4,11 +4,13 @@ title: M6 - Actions
 status: To Do
 assignee: []
 created_date: '2026-07-10 11:54'
+updated_date: '2026-07-11 09:13'
 labels: []
 dependencies: []
 references:
   - ROADMAP.md
-ordinal: 7000
+priority: low
+ordinal: 60000
 ---
 
 ## Description
