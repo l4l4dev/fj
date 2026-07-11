@@ -35,6 +35,65 @@ Use this plan when any of the following applies:
 - Implementation started: Yes / No
 - Ready for implementation: Yes / No
 
+## Decision Classification
+
+Classify every decision before deciding whether it requires human approval.
+
+### Human Approval Required
+
+Use this category for decisions that affect:
+
+- Public CLI/API contracts, output, exit codes, or compatibility
+- Architecture boundaries, dependency direction, or package structure
+- Authentication, credentials, secret handling, or other security boundaries
+- In-scope / out-of-scope behavior, task split, dependencies, or milestone scope
+- New external dependencies
+- Major Change status
+
+Pending items in this category block implementation and require explicit human
+approval.
+
+### AI Decision Allowed
+
+Use this category for non-public implementation choices that stay within the
+approved scope and architecture, including:
+
+- Private DTO names and internal field layout
+- Helper functions and internal control flow
+- Test fixtures and stubs
+- Private formatting helpers that preserve the approved output
+- Internal conversion and validation structure
+
+The agent records the choice in the Implementation Plan and may proceed without
+separate human approval.
+
+### Convention Based
+
+Use this category when an existing repository convention determines the choice,
+including:
+
+- Existing package placement and naming
+- Existing `context.Context`, `apperror`, and DI patterns
+- Existing Presenter boundaries
+- Existing path encoding and credential redaction rules
+- Standard verification commands
+- Backlog CLI update procedures
+
+Record the convention and its source. Escalate it if it conflicts with the
+approved scope, public behavior, architecture, or security rules.
+
+## Decision Escalation Rule
+
+- Do not make assumptions for a Human Approval Required decision.
+- If an AI Decision Allowed or Convention Based choice changes public behavior,
+  architecture, security, compatibility, or scope, escalate it to Human
+  Approval Required and stop implementation.
+- If existing conventions conflict or are insufficient, classify the decision
+  as Human Approval Required.
+- Implementation may proceed only when all Human Approval Required items are
+  approved, AI Decision Allowed items are recorded in the Implementation Plan,
+  and Convention Based choices have documented sources.
+
 ## Missing Decisions
 
 ### CLI Contract
@@ -78,9 +137,23 @@ Use this plan when any of the following applies:
 ### Human Approval Required
 
 - Decision requiring approval:
+- Options / proposal:
 - Compatibility impact:
 - Security impact:
+- Scope impact:
 - Major Change impact:
+
+### AI Decision Allowed
+
+- Internal decision:
+- Proposed implementation:
+- Constraint:
+
+### Convention Based
+
+- Decision:
+- Convention:
+- Source / evidence:
 
 ## Decision Status
 
