@@ -2,9 +2,10 @@
 id: TASK-1
 title: M0 - Foundation
 status: Done
-assignee: []
+assignee:
+  - '@codex'
 created_date: '2026-07-10 11:53'
-updated_date: '2026-07-10 17:59'
+updated_date: '2026-07-11 05:50'
 labels: []
 dependencies: []
 references:
@@ -24,6 +25,12 @@ Goal: Establish the project principles, architectural direction, development wor
 - [x] #2 AI agents and contributors have clear and consistent working rules
 - [x] #3 Architecture, workflow, and repository standards support small, reviewable changes
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Historical note: This task was completed before the standard workflow was introduced. No Implementation Notes, Verification execution record, or Independent Review record exists from that period.
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 

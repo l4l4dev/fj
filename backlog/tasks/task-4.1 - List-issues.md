@@ -2,9 +2,10 @@
 id: TASK-4.1
 title: List issues
 status: Done
-assignee: []
+assignee:
+  - '@codex'
 created_date: '2026-07-10 11:55'
-updated_date: '2026-07-11 01:56'
+updated_date: '2026-07-11 05:50'
 labels: []
 dependencies:
   - TASK-2.9
@@ -82,6 +83,8 @@ Approved design decisions:
 Implemented the approved issue listing flow with an Application-owned issue model and Lister port, Forgejo REST adapter, explicit CLI dependency wiring, and a human-readable presenter. Validation: gofmt -l ., git diff --check, go vet ./..., go test ./..., and make pre-commit all passed (GOCACHE=/tmp/fj-gocache used for sandbox compatibility).
 
 Independent Review: Critical: none. Major: none. Minor: boundary test coverage can be expanded for HTTP status mapping, JSON decode failures, path encoding, empty output, pagination, and secret redaction. Suggestion: add focused adapter, presenter, and Composition Root boundary tests; clarify unknown Forgejo state handling in a future improvement.
+
+Historical note: This task was completed before the standard workflow was introduced. No Independent Review record exists from that period.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

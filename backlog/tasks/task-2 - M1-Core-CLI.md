@@ -2,9 +2,10 @@
 id: TASK-2
 title: M1 - Core CLI
 status: Done
-assignee: []
+assignee:
+  - '@codex'
 created_date: '2026-07-10 11:53'
-updated_date: '2026-07-10 17:56'
+updated_date: '2026-07-11 05:50'
 labels: []
 dependencies: []
 references:
@@ -24,6 +25,12 @@ Goal: Provide a dependable CLI foundation that connects users safely to the inte
 - [x] #2 Authentication and repository context are safe, explicit, and observable
 - [x] #3 Common command, configuration, and failure behavior is consistent
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Historical note: This task was completed before the standard workflow was introduced. No Implementation Notes, Verification execution record, or Independent Review record exists from that period.
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 

@@ -2,9 +2,10 @@
 id: TASK-3.6
 title: View repository collaborators and access
 status: Done
-assignee: []
+assignee:
+  - '@codex'
 created_date: '2026-07-10 11:55'
-updated_date: '2026-07-11 00:12'
+updated_date: '2026-07-11 05:50'
 labels: []
 dependencies:
   - TASK-2.9
@@ -46,6 +47,8 @@ Model: GPT-5 — new public read CLI, Application access model/port, REST endpoi
 Validation: make pre-commit passed, including git diff --check, go vet ./..., and go test ./....
 
 Independent post-implementation review (GPT-5): Critical none, Major none. Minor: direct REST ViewAccess and redaction coverage could be expanded in future hardening; no scope expansion made.
+
+Historical note: This task was completed before the standard workflow was introduced. No Verification execution record or Independent Review record exists from that period.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

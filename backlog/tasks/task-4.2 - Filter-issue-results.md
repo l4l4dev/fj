@@ -2,9 +2,10 @@
 id: TASK-4.2
 title: Filter issue results
 status: Done
-assignee: []
+assignee:
+  - '@codex'
 created_date: '2026-07-10 11:55'
-updated_date: '2026-07-11 02:02'
+updated_date: '2026-07-11 05:50'
 labels: []
 dependencies:
   - TASK-2.9
@@ -46,6 +47,8 @@ Intended scope: approximately 30-90 minutes.
 Approved filter contract: add single-value --assignee USER and --label LABEL filters while preserving --page, --limit, and --state open|closed|all. Only one filter may be specified per invocation; repeated assignee or label values are out of scope. Filter values are not shown in human-readable output. Existing TASK-4.1 command, output, and exit-code compatibility must remain unchanged. Application adds an IssueFilter value owned by the issue package; Forgejo query names do not cross the Application boundary. Infrastructure maps assignee to the assignee query and label to the labels query. Author, milestone, sort, keyword search, fetch-all, and JSON output are out of scope.
 
 Implemented IssueFilter with single-value --assignee and --label flags. Added local validation for empty, combined, and repeated filters; mapped assignee to assignee and label to labels in the Forgejo request; preserved TASK-4.1 output, pagination, state, exit-code, error-boundary, Presenter, and explicit DI behavior. Validation passed: gofmt -l ., git diff --check, go vet ./..., go test ./..., and make pre-commit (GOCACHE=/tmp/fj-gocache for sandbox compatibility).
+
+Historical note: This task was completed before the standard workflow was introduced. No Independent Review record exists from that period.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

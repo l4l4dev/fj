@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@codex'
 created_date: '2026-07-10 17:08'
-updated_date: '2026-07-10 17:35'
+updated_date: '2026-07-11 05:50'
 labels: []
 dependencies:
   - TASK-2.10
@@ -61,6 +61,8 @@ Implemented the approved private Infrastructure HTTP client using net/http. It a
 Validation passed: gofmt -l . (no output); git diff --check; focused go test ./internal/infrastructure/forgejo; go vet ./...; go test ./.... Initial focused run hit the known Go build-cache permission restriction and passed on approved elevated rerun. A compile error during the approved raw-cause removal was corrected before the final successful runs.
 
 Final post-implementation review (independent GPT-5): Critical none; Major none; Minor none; Suggestion none. Confirmed Credential, URL sensitive portions, and injected Doer raw errors cannot be retrieved from RemoteError; errors.As classification and safe operation/status access remain; approved scope and architecture boundaries are preserved; and all verification passes.
+
+Historical note: This task was completed before the standard workflow was introduced. No Verification execution record or Independent Review record exists from that period.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

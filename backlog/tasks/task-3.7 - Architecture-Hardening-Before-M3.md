@@ -2,9 +2,10 @@
 id: TASK-3.7
 title: Architecture Hardening Before M3
 status: Done
-assignee: []
+assignee:
+  - '@codex'
 created_date: '2026-07-11 00:25'
-updated_date: '2026-07-11 01:34'
+updated_date: '2026-07-11 05:50'
 labels: []
 dependencies:
   - TASK-3.1
@@ -74,6 +75,8 @@ Review the current M1/M2 boundaries and contracts, approve a minimal hardening d
 Created as M3 preparation work following the M2 completion review. Required hardening is separated from optional future presenter and JSON improvements.
 
 Split into three implementation children before M3: TASK-3.7.1 Application Error Boundary Refactoring, TASK-3.7.2 Explicit Composition Root Refactoring (depends on 3.7.1), and TASK-3.7.3 Presenter Boundary Introduction (depends on 3.7.2). The parent remains the M3 preparation hardening gate; all children are intentionally To Do.
+
+Historical note: This task was completed before the standard workflow was introduced. No Verification execution record or Independent Review record exists from that period.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

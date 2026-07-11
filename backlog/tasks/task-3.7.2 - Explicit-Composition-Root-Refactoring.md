@@ -2,9 +2,10 @@
 id: TASK-3.7.2
 title: Explicit Composition Root Refactoring
 status: Done
-assignee: []
+assignee:
+  - '@codex'
 created_date: '2026-07-11 00:31'
-updated_date: '2026-07-11 01:23'
+updated_date: '2026-07-11 05:50'
 labels: []
 dependencies:
   - TASK-3.7.1
@@ -71,6 +72,8 @@ Decision 3: Each command constructor receives only the Ports it requires. This r
 Validation: gofmt, git diff --check, go vet ./..., go test ./..., and make pre-commit all passed.
 
 Independent Review: Critical: none. Major: none. Minor: runtime assertions remain inside the legacy wrapper for staged migration compatibility. Suggestion: consider deprecating and removing the wrapper in a future task.
+
+Historical note: This task was completed before the standard workflow was introduced. No Verification execution record or Independent Review record exists from that period.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

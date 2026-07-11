@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@codex'
 created_date: '2026-07-10 11:55'
-updated_date: '2026-07-10 12:43'
+updated_date: '2026-07-11 05:50'
 labels: []
 dependencies: []
 references:
@@ -52,6 +52,8 @@ Documented selection precedence: an explicit profile name takes priority; otherw
 Added Configuration.SelectInstance in the Application layer after configuration validation.
 Missing explicit profiles and ambiguous multi-profile selection return clear deterministic errors.
 Validation passed: gofmt completed and go test ./... passed.
+
+Historical note: This task was completed before the standard workflow was introduced. No Verification execution record or Independent Review record exists from that period.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

@@ -2,9 +2,10 @@
 id: TASK-3.4
 title: Update repository metadata
 status: Done
-assignee: []
+assignee:
+  - '@codex'
 created_date: '2026-07-10 11:55'
-updated_date: '2026-07-10 23:58'
+updated_date: '2026-07-11 05:50'
 labels: []
 dependencies:
   - TASK-2.9
@@ -56,6 +57,8 @@ Model: GPT-5 — approved Major Change involving a mutating public CLI, PATCH tr
 Validation: make pre-commit passed, including git diff --check, go vet ./..., and go test ./....
 
 Independent post-implementation review (GPT-5): initial Major finding that unexpected Updater errors were classified as validation was resolved with an Application ValidationError; re-review Critical none, Major none. Minor: direct internal-error CLI coverage could be added later; no scope expansion.
+
+Historical note: This task was completed before the standard workflow was introduced. No Verification execution record or Independent Review record exists from that period.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

@@ -2,9 +2,10 @@
 id: TASK-3.7.1
 title: Application Error Boundary Refactoring
 status: Done
-assignee: []
+assignee:
+  - '@codex'
 created_date: '2026-07-11 00:31'
-updated_date: '2026-07-11 00:49'
+updated_date: '2026-07-11 05:50'
 labels: []
 dependencies: []
 parent_task_id: TASK-3.7
@@ -76,6 +77,8 @@ Decision 4: Preserve 404 and 409 as Application categories NotFound and Conflict
 Validation: M1/M2 regression tests passed and make pre-commit passed, including git diff --check, go vet ./..., and go test ./....
 
 Review: Independent post-implementation review (GPT-5) found Critical none and Major none. Minor: legacy repository.RemoteError remains for compatibility but is not referenced by CLI; future deprecation may be considered.
+
+Historical note: This task was completed before the standard workflow was introduced. No Verification execution record or Independent Review record exists from that period.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
