@@ -5,8 +5,9 @@ status: Done
 assignee:
   - '@codex'
 created_date: '2026-07-11 17:33'
-updated_date: '2026-07-11 18:00'
+updated_date: '2026-07-11 19:35'
 labels: []
+milestone: m-10
 dependencies:
   - TASK-10.1
 parent_task_id: TASK-11

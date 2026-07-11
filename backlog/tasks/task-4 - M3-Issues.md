@@ -5,8 +5,9 @@ status: Done
 assignee:
   - '@codex'
 created_date: '2026-07-10 11:54'
-updated_date: '2026-07-11 07:49'
+updated_date: '2026-07-11 19:35'
 labels: []
+milestone: m-3
 dependencies: []
 references:
   - ROADMAP.md

@@ -4,8 +4,9 @@ title: Git History Cleanup
 status: Done
 assignee: []
 created_date: '2026-07-11 10:29'
-updated_date: '2026-07-11 10:32'
+updated_date: '2026-07-11 19:35'
 labels: []
+milestone: m-9
 dependencies:
   - TASK-10.6
 parent_task_id: TASK-10

@@ -4,8 +4,9 @@ title: Public CLI Foundation
 status: To Do
 assignee: []
 created_date: '2026-07-11 09:08'
-updated_date: '2026-07-11 17:15'
+updated_date: '2026-07-11 19:35'
 labels: []
+milestone: m-9
 dependencies: []
 priority: low
 ordinal: 10990

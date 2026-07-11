@@ -4,8 +4,9 @@ title: Git History Privacy Audit
 status: Done
 assignee: []
 created_date: '2026-07-11 09:37'
-updated_date: '2026-07-11 10:30'
+updated_date: '2026-07-11 19:35'
 labels: []
+milestone: m-9
 dependencies:
   - TASK-10.5
 parent_task_id: TASK-10
