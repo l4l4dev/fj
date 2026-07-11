@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.Inspector, creator applicationissue.Creator, updater applicationissue.Updater, stateChanger applicationissue.StateChanger, commentViewer applicationissue.CommentViewer, commentCreator applicationissue.CommentCreator, labelAdder applicationissue.LabelAdder, labelRemover applicationissue.LabelRemover, milestoneSetter applicationissue.MilestoneSetter, milestoneClearer applicationissue.MilestoneClearer) *cobra.Command {
+func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.Inspector, creator applicationissue.Creator, updater applicationissue.Updater, stateChanger applicationissue.StateChanger, commentViewer applicationissue.CommentViewer, commentCreator applicationissue.CommentCreator, labelAdder applicationissue.LabelAdder, labelRemover applicationissue.LabelRemover, milestoneSetter applicationissue.MilestoneSetter, milestoneClearer applicationissue.MilestoneClearer, assigner applicationissue.Assigner, unassigner applicationissue.Unassigner) *cobra.Command {
 	command := &cobra.Command{Use: "issue", Short: "Manage issues"}
 	command.AddCommand(newIssueListCommand(lister))
 	command.AddCommand(newIssueInspectCommand(inspector))
@@ -19,6 +19,85 @@ func newIssueCommand(lister applicationissue.Lister, inspector applicationissue.
 	command.AddCommand(newIssueCommentCommand(commentViewer, commentCreator))
 	command.AddCommand(newIssueLabelCommand(labelAdder, labelRemover))
 	command.AddCommand(newIssueMilestoneCommand(milestoneSetter, milestoneClearer))
+	command.AddCommand(newIssueAssignCommand(assigner))
+	command.AddCommand(newIssueUnassignCommand(unassigner))
+	return command
+}
+
+func newIssueAssignCommand(assigner applicationissue.Assigner) *cobra.Command {
+	var instance string
+	command := &cobra.Command{Use: "assign OWNER/NAME NUMBER USER", Short: "Assign issue", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 3 {
+			return newCommandError(categoryValidation, "assign issue", fmt.Errorf("OWNER/NAME, issue number, and username are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "assign issue", err)
+		}
+		number, err := strconv.Atoi(args[1])
+		if err != nil || number < 1 {
+			return newCommandError(categoryValidation, "assign issue", fmt.Errorf("issue number must be a positive integer"))
+		}
+		if strings.TrimSpace(args[2]) == "" || strings.EqualFold(strings.TrimSpace(args[2]), "none") {
+			return newCommandError(categoryValidation, "assign issue", fmt.Errorf("username is required"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if assigner == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			assigner = dependencies.Assigner
+			if assigner == nil {
+				return newCommandError(categoryInternal, "assign issue", fmt.Errorf("assigner unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		result, err := applicationissue.NewAssignUseCase(assigner).Execute(command.Context(), applicationissue.AssignRequest{Owner: parts[0], Name: parts[1], Number: number, Username: args[2]})
+		if err != nil {
+			return mapApplicationError(err, "assign issue")
+		}
+		return (issuePresenter{}).PresentAssigned(command.OutOrStdout(), number, result)
+	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
+	return command
+}
+
+func newIssueUnassignCommand(unassigner applicationissue.Unassigner) *cobra.Command {
+	var instance string
+	command := &cobra.Command{Use: "unassign OWNER/NAME NUMBER", Short: "Unassign issue", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 2 {
+			return newCommandError(categoryValidation, "unassign issue", fmt.Errorf("OWNER/NAME and issue number are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "unassign issue", err)
+		}
+		number, err := strconv.Atoi(args[1])
+		if err != nil || number < 1 {
+			return newCommandError(categoryValidation, "unassign issue", fmt.Errorf("issue number must be a positive integer"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if unassigner == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			unassigner = dependencies.Unassigner
+			if unassigner == nil {
+				return newCommandError(categoryInternal, "unassign issue", fmt.Errorf("unassigner unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		err := applicationissue.NewUnassignUseCase(unassigner).Execute(command.Context(), applicationissue.UnassignRequest{Owner: parts[0], Name: parts[1], Number: number})
+		if err != nil {
+			return mapApplicationError(err, "unassign issue")
+		}
+		return (issuePresenter{}).PresentUnassigned(command.OutOrStdout(), number)
+	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 

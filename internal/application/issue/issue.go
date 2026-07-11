@@ -175,6 +175,29 @@ type MilestoneClearer interface {
 	ClearMilestone(context.Context, ClearMilestoneRequest) error
 }
 
+type Assignment struct{ Username string }
+
+type AssignRequest struct {
+	Owner    string
+	Name     string
+	Number   int
+	Username string
+}
+
+type UnassignRequest struct {
+	Owner  string
+	Name   string
+	Number int
+}
+
+type Assigner interface {
+	Assign(context.Context, AssignRequest) (Assignment, error)
+}
+
+type Unassigner interface {
+	Unassign(context.Context, UnassignRequest) error
+}
+
 type ListUseCase struct{ lister Lister }
 
 func NewListUseCase(lister Lister) ListUseCase { return ListUseCase{lister: lister} }

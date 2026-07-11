@@ -98,6 +98,38 @@ func TestIssueStateOutput(t *testing.T) {
 	}
 }
 
+type assignerStubForCLI struct{}
+
+func (assignerStubForCLI) Assign(_ context.Context, r applicationissue.AssignRequest) (applicationissue.Assignment, error) {
+	return applicationissue.Assignment{Username: r.Username}, nil
+}
+func (assignerStubForCLI) Unassign(context.Context, applicationissue.UnassignRequest) error {
+	return nil
+}
+
+func TestIssueAssignmentOutput(t *testing.T) {
+	command := newIssueAssignCommand(assignerStubForCLI{})
+	command.SetArgs([]string{"alice/project", "12", "bob"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if output.String() != "Issue: #12\nAssignee: bob\n" {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+	command = newIssueUnassignCommand(assignerStubForCLI{})
+	command.SetArgs([]string{"alice/project", "12"})
+	output.Reset()
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if output.String() != "Issue: #12\nAssignee cleared\n" {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+}
+
 func TestIssueCommentOutputs(t *testing.T) {
 	list := newIssueCommentListCommand(commentViewerStubForCLI{comments: []applicationissue.Comment{{ID: 1, Body: "hello"}}})
 	list.SetArgs([]string{"alice/project", "12"})

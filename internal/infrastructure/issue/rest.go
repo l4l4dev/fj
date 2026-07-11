@@ -50,6 +50,81 @@ type forgejoIssueMilestone struct {
 	Milestone *forgejoMilestone `json:"milestone"`
 }
 
+type forgejoIssueAssignee struct {
+	Username string `json:"username"`
+}
+
+type forgejoIssueAssignment struct {
+	Assignee *forgejoIssueAssignee `json:"assignee"`
+}
+
+func (adapter *RESTAdapter) currentIssueAssignee(ctx context.Context, owner, name string, number int) (*applicationissue.Assignment, error) {
+	path := "/api/v1/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(name) + "/issues/" + strconv.Itoa(number)
+	response, err := adapter.transport.Do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, translateAssignmentError(err, "get issue assignee")
+	}
+	defer response.Body.Close()
+	var decoded forgejoIssueAssignment
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return nil, apperror.New(apperror.Remote, "get issue assignee", "")
+	}
+	if decoded.Assignee == nil {
+		return nil, nil
+	}
+	return &applicationissue.Assignment{Username: decoded.Assignee.Username}, nil
+}
+
+func (adapter *RESTAdapter) Assign(ctx context.Context, request applicationissue.AssignRequest) (applicationissue.Assignment, error) {
+	current, err := adapter.currentIssueAssignee(ctx, request.Owner, request.Name, request.Number)
+	if err != nil {
+		return applicationissue.Assignment{}, err
+	}
+	if current != nil && current.Username == request.Username {
+		return *current, nil
+	}
+	jsonClient, ok := adapter.transport.(jsonTransport)
+	if !ok {
+		return applicationissue.Assignment{}, apperror.New(apperror.Remote, "assign issue", "")
+	}
+	body, _ := json.Marshal(struct {
+		Assignee string `json:"assignee"`
+	}{request.Username})
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues/" + strconv.Itoa(request.Number)
+	response, err := jsonClient.DoJSON(ctx, http.MethodPatch, path, nil, body)
+	if err != nil {
+		return applicationissue.Assignment{}, translateAssignmentError(err, "assign issue")
+	}
+	defer response.Body.Close()
+	var decoded forgejoIssueAssignment
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil || decoded.Assignee == nil {
+		return applicationissue.Assignment{}, apperror.New(apperror.Remote, "assign issue", "")
+	}
+	return applicationissue.Assignment{Username: decoded.Assignee.Username}, nil
+}
+
+func (adapter *RESTAdapter) Unassign(ctx context.Context, request applicationissue.UnassignRequest) error {
+	current, err := adapter.currentIssueAssignee(ctx, request.Owner, request.Name, request.Number)
+	if err != nil {
+		return err
+	}
+	if current == nil {
+		return nil
+	}
+	jsonClient, ok := adapter.transport.(jsonTransport)
+	if !ok {
+		return apperror.New(apperror.Remote, "unassign issue", "")
+	}
+	body := []byte(`{"assignee":null}`)
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues/" + strconv.Itoa(request.Number)
+	response, err := jsonClient.DoJSON(ctx, http.MethodPatch, path, nil, body)
+	if err != nil {
+		return translateAssignmentError(err, "unassign issue")
+	}
+	response.Body.Close()
+	return nil
+}
+
 func (adapter *RESTAdapter) Inspect(ctx context.Context, request applicationissue.InspectRequest) (applicationissue.IssueDetail, error) {
 	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues/" + strconv.Itoa(request.Number)
 	response, err := adapter.transport.Do(ctx, http.MethodGet, path, nil)
@@ -560,6 +635,14 @@ func translateMilestoneError(err error, operation string) error {
 	return apperror.New(apperror.Remote, operation, "")
 }
 
+func translateAssignmentError(err error, operation string) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) && (status.StatusCode() == 401 || status.StatusCode() == 403) {
+		return apperror.New(apperror.Authentication, operation, "")
+	}
+	return apperror.New(apperror.Remote, operation, "")
+}
+
 var _ applicationissue.Lister = (*RESTAdapter)(nil)
 var _ applicationissue.Inspector = (*RESTAdapter)(nil)
 var _ applicationissue.Creator = (*RESTAdapter)(nil)
@@ -571,3 +654,5 @@ var _ applicationissue.LabelAdder = (*RESTAdapter)(nil)
 var _ applicationissue.LabelRemover = (*RESTAdapter)(nil)
 var _ applicationissue.MilestoneSetter = (*RESTAdapter)(nil)
 var _ applicationissue.MilestoneClearer = (*RESTAdapter)(nil)
+var _ applicationissue.Assigner = (*RESTAdapter)(nil)
+var _ applicationissue.Unassigner = (*RESTAdapter)(nil)

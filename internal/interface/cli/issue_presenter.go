@@ -10,6 +10,16 @@ import (
 
 type issuePresenter struct{}
 
+func (issuePresenter) PresentAssigned(w io.Writer, number int, assignment applicationissue.Assignment) error {
+	_, err := fmt.Fprintf(w, "Issue: #%d\nAssignee: %s\n", number, assignment.Username)
+	return err
+}
+
+func (issuePresenter) PresentUnassigned(w io.Writer, number int) error {
+	_, err := fmt.Fprintf(w, "Issue: #%d\nAssignee cleared\n", number)
+	return err
+}
+
 func (issuePresenter) PresentMilestoneSet(w io.Writer, number int, milestone applicationissue.Milestone) error {
 	_, err := fmt.Fprintf(w, "Issue: #%d\nMilestone set: %s\n", number, milestone.Title)
 	return err

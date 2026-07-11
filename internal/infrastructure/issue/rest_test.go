@@ -184,3 +184,24 @@ func TestRESTAdapterMilestoneIdempotencyAndConversion(t *testing.T) {
 		t.Fatalf("unexpected clear idempotency: methods=%v err=%v", transport.methods, err)
 	}
 }
+
+func TestRESTAdapterAssignmentIdempotencyAndConversion(t *testing.T) {
+	transport := &milestoneTransport{responses: []string{`{"number":12,"assignee":{"username":"alice"}}`, `{"number":12,"assignee":{"username":"bob"}}`}}
+	assignment, err := NewRESTAdapter(transport).Assign(context.Background(), applicationissue.AssignRequest{Owner: "alice", Name: "project", Number: 12, Username: "bob"})
+	if err != nil || assignment.Username != "bob" || len(transport.methods) != 2 || transport.methods[1] != http.MethodPatch || string(transport.bodies[1]) != `{"assignee":"bob"}` {
+		t.Fatalf("unexpected assignment: %+v methods=%v bodies=%v err=%v", assignment, transport.methods, transport.bodies, err)
+	}
+	transport = &milestoneTransport{responses: []string{`{"number":12,"assignee":{"username":"bob"}}`}}
+	assignment, err = NewRESTAdapter(transport).Assign(context.Background(), applicationissue.AssignRequest{Owner: "alice", Name: "project", Number: 12, Username: "bob"})
+	if err != nil || assignment.Username != "bob" || len(transport.methods) != 1 {
+		t.Fatalf("expected idempotent assign: %+v methods=%v err=%v", assignment, transport.methods, err)
+	}
+	transport = &milestoneTransport{responses: []string{`{"number":12,"assignee":null}`}}
+	if err := NewRESTAdapter(transport).Unassign(context.Background(), applicationissue.UnassignRequest{Owner: "alice", Name: "project", Number: 12}); err != nil || len(transport.methods) != 1 {
+		t.Fatalf("expected idempotent unassign: methods=%v err=%v", transport.methods, err)
+	}
+	transport = &milestoneTransport{responses: []string{`{"number":12,"assignee":{"username":"bob"}}`, `{}`}}
+	if err := NewRESTAdapter(transport).Unassign(context.Background(), applicationissue.UnassignRequest{Owner: "alice", Name: "project", Number: 12}); err != nil || len(transport.methods) != 2 || string(transport.bodies[1]) != `{"assignee":null}` {
+		t.Fatalf("unexpected unassign: methods=%v bodies=%v err=%v", transport.methods, transport.bodies, err)
+	}
+}
