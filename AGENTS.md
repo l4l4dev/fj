@@ -261,6 +261,16 @@ A task may be marked Done only when all of the following are true:
 - Status updated to Done
 - No unapproved scope remains
 
+## 18. Autonomous Workflow Enforcement
+
+- An agent must not implement a task unless its dependencies are complete and its approved Decision is recorded in Backlog.
+- When multiple tasks are executable, select the highest-priority task; use ordinal order as the tie-breaker.
+- An agent must stop when no executable task exists, when an approval decision is unresolved, or when the approved scope cannot be maintained.
+- Public CLI/API contracts, security boundaries, dependency direction, external dependencies, and roadmap or milestone changes require human approval before implementation.
+- A task must not be marked Done with unchecked Acceptance Criteria, missing Verification, missing Independent Review, missing Final Summary, or unresolved Critical/Major findings.
+- Minor findings must be fixed or explicitly recorded as deferred; Suggestions must be recorded when they affect future work.
+- Model selection and its rationale must be recorded in the task's Implementation Notes.
+
 <!-- BACKLOG.MD GUIDELINES START -->
 <CRITICAL_INSTRUCTION>
 

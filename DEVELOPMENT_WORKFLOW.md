@@ -3,6 +3,31 @@
 This workflow applies to human contributors and AI agents. It complements
 `AGENTS.md`, `CONTRIBUTING.md`, and the Backlog task instructions.
 
+## AI lifecycle
+
+Every implementation task follows this lifecycle:
+
+```text
+Preflight → Decision review → Approval → Implementation → Verification → Independent review → Backlog finalization → Stop
+```
+
+Work on one task at a time. Commit and Push are separate, explicitly authorized
+operations and are not part of task completion.
+
+## Preflight
+
+Before implementation:
+
+1. Read `PROJECT_CONSTITUTION.md`, `ARCHITECTURE.md`, and `ROADMAP.md`.
+2. Run `backlog instructions overview`.
+3. Select an executable task whose dependencies are complete; choose the highest priority and use ordinal order as the tie-breaker.
+4. Read the task, Acceptance Criteria, Implementation Notes, Decision, and dependencies.
+5. Confirm Assignee, approved scope, non-goals, public compatibility, and Major Change status.
+6. Stop for human approval when a public contract, security boundary, dependency direction, external dependency, or roadmap/milestone would change.
+
+Record the selected task, selection reason, model and rationale, readiness decision,
+and planned files in the task or work report.
+
 ## 1. Task selection
 
 Select one executable task from Backlog according to status, dependencies,
@@ -25,10 +50,24 @@ approval gate. Record the approved decision in the Backlog task before coding.
 Assign an implementation owner, update the task to In Progress, and change only
 the approved scope. Add or update tests for behavior changes.
 
+During implementation, stop if the Acceptance Criteria are insufficient, an
+unapproved scope change is needed, or the task will no longer remain a small,
+reviewable unit. Do not start another task in the same loop.
+
 ## 5. Verification
 
 Run the checks required by the task and project workflow. Record every command,
 result, limitation, and unverified item in the Backlog task.
+
+For Go changes, run at minimum:
+
+```text
+gofmt -l .
+git diff --check
+go vet ./...
+go test ./...
+make pre-commit
+```
 
 ## 6. Independent review
 
@@ -46,6 +85,11 @@ Before marking a task Done:
 - record the Final Summary;
 - confirm no unapproved scope remains;
 - set Status to Done only after all completion conditions are satisfied.
+
+Use the Backlog CLI for all task updates. Before setting `Done`, confirm that
+every Acceptance Criterion is checked, Verification and Independent Review are
+recorded, Critical/Major findings are resolved, Implementation Notes and Final
+Summary are present, Assignee is set, and no unapproved scope remains.
 
 ## 8. Commit / Push
 
