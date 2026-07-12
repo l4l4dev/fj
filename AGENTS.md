@@ -36,6 +36,8 @@ If sources conflict or requirements are unclear, stop and ask for clarification.
 
 ## 4. Development Workflow
 
+For reusable task workflow and AI prompt templates, see [`backlog/templates/README.md`](backlog/templates/README.md).
+
 1. Work on only one task at a time.
 2. Read the relevant documentation, code, tests, and recent changes.
 3. Confirm the task scope, constraints, and approval state.
