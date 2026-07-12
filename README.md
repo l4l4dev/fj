@@ -273,3 +273,8 @@ Treat failures from these commands as environment-dependent until the selected
 instance's permissions and API compatibility have been verified. Do not record
 credential values, raw tokens, real hostnames, or real repository owners in
 command output or support reports.
+
+## License
+
+fj is available under the MIT License.
+See [LICENSE](LICENSE) for details.
