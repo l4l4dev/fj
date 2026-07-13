@@ -278,3 +278,6 @@ command output or support reports.
 
 fj is available under the MIT License.
 See [LICENSE](LICENSE) for details.
+
+Third-party dependency licenses and attribution are documented in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
