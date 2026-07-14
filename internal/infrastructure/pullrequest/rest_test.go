@@ -30,6 +30,26 @@ func (transport errorTransport) Do(context.Context, string, string, url.Values) 
 	return nil, transport.err
 }
 
+type jsonStubTransport struct {
+	method string
+	path   string
+	body   []byte
+	err    error
+}
+
+func (stub *jsonStubTransport) Do(context.Context, string, string, url.Values) (*http.Response, error) {
+	return nil, errors.New("unexpected Do call")
+}
+
+func (stub *jsonStubTransport) DoJSON(_ context.Context, method, path string, _ url.Values, body []byte) (*http.Response, error) {
+	stub.method, stub.path, stub.body = method, path, body
+	if stub.err != nil {
+		return nil, stub.err
+	}
+	response := `{"number":7,"title":"Improve flow","state":"open","head":{"ref":"feature"},"base":{"ref":"main"}}`
+	return &http.Response{StatusCode: http.StatusCreated, Body: io.NopCloser(strings.NewReader(response))}, nil
+}
+
 func (s *stubTransport) Do(_ context.Context, _ string, path string, query url.Values) (*http.Response, error) {
 	s.path, s.query = path, query
 	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(s.body))}, nil
@@ -69,5 +89,37 @@ func TestRESTAdapterInspect(t *testing.T) {
 	}
 	if transport.path != "/api/v1/repos/alice/project/pulls/12" {
 		t.Fatalf("unexpected path: %s", transport.path)
+	}
+}
+
+func TestRESTAdapterCreate(t *testing.T) {
+	transport := &jsonStubTransport{}
+	request := applicationpullrequest.CreateRequest{Owner: "alice", Name: "project", Title: "Improve flow", HeadBranch: "feature", BaseBranch: "main"}
+	result, err := NewRESTAdapter(transport).Create(context.Background(), request)
+	if err != nil || result.Number != 7 || result.HeadBranch != "feature" || result.BaseBranch != "main" {
+		t.Fatalf("unexpected result: %+v err=%v", result, err)
+	}
+	if transport.method != http.MethodPost || transport.path != "/api/v1/repos/alice/project/pulls" {
+		t.Fatalf("unexpected request: method=%s path=%s", transport.method, transport.path)
+	}
+	if string(transport.body) != `{"title":"Improve flow","head":"feature","base":"main"}` {
+		t.Fatalf("unexpected body: %s", transport.body)
+	}
+}
+
+func TestRESTAdapterCreateMapsConflictWithoutRemoteDetails(t *testing.T) {
+	transport := &jsonStubTransport{err: statusError(http.StatusUnprocessableEntity)}
+	_, err := NewRESTAdapter(transport).Create(context.Background(), applicationpullrequest.CreateRequest{})
+	if err == nil || err.Error() != "create pull request: pull request branches are invalid or conflict with an existing pull request" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRESTAdapterCreateMapsNotFoundWithoutMisdiagnosingTarget(t *testing.T) {
+	transport := &jsonStubTransport{err: statusError(http.StatusNotFound)}
+	_, err := NewRESTAdapter(transport).Create(context.Background(), applicationpullrequest.CreateRequest{})
+	var appErr apperror.Error
+	if !errors.As(err, &appErr) || appErr.Category != apperror.NotFound || appErr.Message != "repository or branch not found" {
+		t.Fatalf("unexpected error: %#v", err)
 	}
 }

@@ -16,6 +16,10 @@ type transport interface {
 	Do(context.Context, string, string, url.Values) (*http.Response, error)
 }
 
+type jsonTransport interface {
+	DoJSON(context.Context, string, string, url.Values, []byte) (*http.Response, error)
+}
+
 type RESTAdapter struct{ transport transport }
 
 type forgejoPullRequest struct {
@@ -44,6 +48,32 @@ type forgejoPullRequestDetail struct {
 }
 
 func NewRESTAdapter(t transport) *RESTAdapter { return &RESTAdapter{transport: t} }
+
+func (a *RESTAdapter) Create(ctx context.Context, request applicationpullrequest.CreateRequest) (applicationpullrequest.PullRequestDetail, error) {
+	jsonClient, ok := a.transport.(jsonTransport)
+	if !ok {
+		return applicationpullrequest.PullRequestDetail{}, apperror.New(apperror.Remote, "create pull request", "")
+	}
+	body, err := json.Marshal(struct {
+		Title string `json:"title"`
+		Head  string `json:"head"`
+		Base  string `json:"base"`
+	}{Title: request.Title, Head: request.HeadBranch, Base: request.BaseBranch})
+	if err != nil {
+		return applicationpullrequest.PullRequestDetail{}, apperror.New(apperror.Remote, "create pull request", "")
+	}
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/pulls"
+	response, err := jsonClient.DoJSON(ctx, http.MethodPost, path, nil, body)
+	if err != nil {
+		return applicationpullrequest.PullRequestDetail{}, translateCreateError(err)
+	}
+	defer response.Body.Close()
+	var decoded forgejoPullRequestDetail
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationpullrequest.PullRequestDetail{}, apperror.New(apperror.Remote, "create pull request", "")
+	}
+	return applicationpullrequest.PullRequestDetail{Number: decoded.Number, Title: decoded.Title, State: applicationpullrequest.State(decoded.State), HeadBranch: decoded.Head.Ref, BaseBranch: decoded.Base.Ref}, nil
+}
 
 func (a *RESTAdapter) List(ctx context.Context, request applicationpullrequest.ListRequest) ([]applicationpullrequest.PullRequest, error) {
 	query := url.Values{}
@@ -112,5 +142,21 @@ func translateInspectError(err error) error {
 	return apperror.New(apperror.Remote, "inspect pull request", "")
 }
 
+func translateCreateError(err error) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		switch status.StatusCode() {
+		case 401, 403:
+			return apperror.New(apperror.Authentication, "create pull request", "")
+		case 404:
+			return apperror.New(apperror.NotFound, "create pull request", "repository or branch not found")
+		case 409, 422:
+			return apperror.New(apperror.Conflict, "create pull request", "pull request branches are invalid or conflict with an existing pull request")
+		}
+	}
+	return apperror.New(apperror.Remote, "create pull request", "")
+}
+
 var _ applicationpullrequest.PullRequestLister = (*RESTAdapter)(nil)
 var _ applicationpullrequest.PullRequestInspector = (*RESTAdapter)(nil)
+var _ applicationpullrequest.PullRequestCreator = (*RESTAdapter)(nil)

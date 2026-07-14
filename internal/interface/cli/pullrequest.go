@@ -14,9 +14,67 @@ func newPullRequestCommand(lister applicationpullrequest.PullRequestLister) *cob
 }
 
 func newPullRequestCommandWithInspector(lister applicationpullrequest.PullRequestLister, inspector applicationpullrequest.PullRequestInspector) *cobra.Command {
+	return newPullRequestCommandWithDependencies(lister, inspector, nil)
+}
+
+func newPullRequestCommandWithDependencies(lister applicationpullrequest.PullRequestLister, inspector applicationpullrequest.PullRequestInspector, creator applicationpullrequest.PullRequestCreator) *cobra.Command {
 	command := &cobra.Command{Use: "pr", Short: "Manage pull requests"}
 	command.AddCommand(newPullRequestListCommand(lister))
 	command.AddCommand(newPullRequestInspectCommand(inspector))
+	command.AddCommand(newPullRequestCreateCommand(creator))
+	return command
+}
+
+func newPullRequestCreateCommand(creator applicationpullrequest.PullRequestCreator) *cobra.Command {
+	var instance, title, head, base string
+	command := &cobra.Command{Use: "create OWNER/NAME", Short: "Create a pull request", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			return newCommandError(categoryValidation, "create pull request", fmt.Errorf("OWNER/NAME is required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "create pull request", err)
+		}
+		if strings.TrimSpace(title) == "" {
+			return newCommandError(categoryValidation, "create pull request", fmt.Errorf("pull request title is required"))
+		}
+		if strings.TrimSpace(head) == "" {
+			return newCommandError(categoryValidation, "create pull request", fmt.Errorf("head branch is required"))
+		}
+		if strings.Contains(head, ":") {
+			return newCommandError(categoryValidation, "create pull request", fmt.Errorf("cross-fork head branches are not supported"))
+		}
+		if strings.TrimSpace(base) == "" {
+			return newCommandError(categoryValidation, "create pull request", fmt.Errorf("base branch is required"))
+		}
+		if strings.Contains(base, ":") {
+			return newCommandError(categoryValidation, "create pull request", fmt.Errorf("base branch must belong to the target repository"))
+		}
+		if head == base {
+			return newCommandError(categoryValidation, "create pull request", fmt.Errorf("head and base branches must differ"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if creator == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			creator = dependencies.PullRequestCreator
+			if creator == nil {
+				return newCommandError(categoryInternal, "create pull request", fmt.Errorf("pull request creator unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		result, err := applicationpullrequest.NewCreateUseCase(creator).Execute(command.Context(), applicationpullrequest.CreateRequest{Owner: parts[0], Name: parts[1], Title: title, HeadBranch: head, BaseBranch: base})
+		if err != nil {
+			return mapApplicationError(err, "create pull request")
+		}
+		return (pullRequestPresenter{}).PresentCreated(command.OutOrStdout(), result)
+	}}
+	command.Flags().StringVar(&title, "title", "", "pull request title")
+	command.Flags().StringVar(&head, "head", "", "source branch")
+	command.Flags().StringVar(&base, "base", "", "target branch")
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 

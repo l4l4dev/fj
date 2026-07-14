@@ -48,3 +48,15 @@ type InspectRequest struct {
 type PullRequestInspector interface {
 	Inspect(context.Context, InspectRequest) (PullRequestDetail, error)
 }
+
+type CreateRequest struct {
+	Owner      string
+	Name       string
+	Title      string
+	HeadBranch string
+	BaseBranch string
+}
+
+type PullRequestCreator interface {
+	Create(context.Context, CreateRequest) (PullRequestDetail, error)
+}
