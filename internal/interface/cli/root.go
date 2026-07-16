@@ -29,28 +29,29 @@ func NewRootCommandWithVersion(dependencies RepositoryDependencies, version stri
 }
 
 type RepositoryDependencies struct {
-	List                 applicationrepository.Service
-	Inspect              applicationrepository.Getter
-	Create               applicationrepository.Creator
-	Update               applicationrepository.Updater
-	Archive              applicationrepository.Archiver
-	Access               applicationrepository.AccessViewer
-	Issues               applicationissue.Lister
-	IssueInspector       applicationissue.Inspector
-	IssueCreator         applicationissue.Creator
-	IssueUpdater         applicationissue.Updater
-	IssueStateChanger    applicationissue.StateChanger
-	CommentViewer        applicationissue.CommentViewer
-	CommentCreator       applicationissue.CommentCreator
-	LabelAdder           applicationissue.LabelAdder
-	LabelRemover         applicationissue.LabelRemover
-	MilestoneSetter      applicationissue.MilestoneSetter
-	MilestoneClearer     applicationissue.MilestoneClearer
-	Assigner             applicationissue.Assigner
-	Unassigner           applicationissue.Unassigner
-	PullRequests         applicationpullrequest.PullRequestLister
-	PullRequestInspector applicationpullrequest.PullRequestInspector
-	PullRequestCreator   applicationpullrequest.PullRequestCreator
+	List                    applicationrepository.Service
+	Inspect                 applicationrepository.Getter
+	Create                  applicationrepository.Creator
+	Update                  applicationrepository.Updater
+	Archive                 applicationrepository.Archiver
+	Access                  applicationrepository.AccessViewer
+	Issues                  applicationissue.Lister
+	IssueInspector          applicationissue.Inspector
+	IssueCreator            applicationissue.Creator
+	IssueUpdater            applicationissue.Updater
+	IssueStateChanger       applicationissue.StateChanger
+	CommentViewer           applicationissue.CommentViewer
+	CommentCreator          applicationissue.CommentCreator
+	LabelAdder              applicationissue.LabelAdder
+	LabelRemover            applicationissue.LabelRemover
+	MilestoneSetter         applicationissue.MilestoneSetter
+	MilestoneClearer        applicationissue.MilestoneClearer
+	Assigner                applicationissue.Assigner
+	Unassigner              applicationissue.Unassigner
+	PullRequests            applicationpullrequest.PullRequestLister
+	PullRequestInspector    applicationpullrequest.PullRequestInspector
+	PullRequestCreator      applicationpullrequest.PullRequestCreator
+	PullRequestStatusViewer applicationpullrequest.StatusViewer
 }
 
 func NewRootCommandWithDependencies(dependencies RepositoryDependencies) *cobra.Command {
@@ -70,7 +71,7 @@ func newRootCommand(dependencies RepositoryDependencies, version string) *cobra.
 	command.AddCommand(newVersionCommand(version))
 	command.AddCommand(newRepositoryCommand(dependencies))
 	command.AddCommand(newIssueCommand(dependencies.Issues, dependencies.IssueInspector, dependencies.IssueCreator, dependencies.IssueUpdater, dependencies.IssueStateChanger, dependencies.CommentViewer, dependencies.CommentCreator, dependencies.LabelAdder, dependencies.LabelRemover, dependencies.MilestoneSetter, dependencies.MilestoneClearer, dependencies.Assigner, dependencies.Unassigner))
-	command.AddCommand(newPullRequestCommandWithDependencies(dependencies.PullRequests, dependencies.PullRequestInspector, dependencies.PullRequestCreator))
+	command.AddCommand(newPullRequestCommandWithDependencies(dependencies.PullRequests, dependencies.PullRequestInspector, dependencies.PullRequestCreator, dependencies.PullRequestStatusViewer))
 	command.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return newCommandError(categoryValidation, "execute command", err)
 	})
@@ -118,7 +119,7 @@ func composeRepositoryDependencies(ctx context.Context, instanceName string) (Re
 	adapter := infrastructurerepository.NewRESTAdapter(forgejo.NewClient(instance, credential, version, nil))
 	issueAdapter := infrastructureissue.NewRESTAdapter(forgejo.NewClient(instance, credential, version, nil))
 	pullRequestAdapter := infrastructurerpullrequest.NewRESTAdapter(forgejo.NewClient(instance, credential, version, nil))
-	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter, Issues: issueAdapter, IssueInspector: issueAdapter, IssueCreator: issueAdapter, IssueUpdater: issueAdapter, IssueStateChanger: issueAdapter, CommentViewer: issueAdapter, CommentCreator: issueAdapter, LabelAdder: issueAdapter, LabelRemover: issueAdapter, MilestoneSetter: issueAdapter, MilestoneClearer: issueAdapter, Assigner: issueAdapter, Unassigner: issueAdapter, PullRequests: pullRequestAdapter, PullRequestInspector: pullRequestAdapter, PullRequestCreator: pullRequestAdapter}, nil
+	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter, Issues: issueAdapter, IssueInspector: issueAdapter, IssueCreator: issueAdapter, IssueUpdater: issueAdapter, IssueStateChanger: issueAdapter, CommentViewer: issueAdapter, CommentCreator: issueAdapter, LabelAdder: issueAdapter, LabelRemover: issueAdapter, MilestoneSetter: issueAdapter, MilestoneClearer: issueAdapter, Assigner: issueAdapter, Unassigner: issueAdapter, PullRequests: pullRequestAdapter, PullRequestInspector: pullRequestAdapter, PullRequestCreator: pullRequestAdapter, PullRequestStatusViewer: pullRequestAdapter}, nil
 }
 
 func versionFromContext(ctx context.Context) string {

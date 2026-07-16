@@ -28,6 +28,7 @@ type forgejoPullRequest struct {
 	State  string `json:"state"`
 	Head   struct {
 		Ref string `json:"ref"`
+		SHA string `json:"sha"`
 	} `json:"head"`
 	Base struct {
 		Ref string `json:"ref"`
@@ -35,19 +36,136 @@ type forgejoPullRequest struct {
 }
 
 type forgejoPullRequestDetail struct {
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	State  string `json:"state"`
-	Body   string `json:"body"`
-	Head   struct {
+	Number    int    `json:"number"`
+	Title     string `json:"title"`
+	State     string `json:"state"`
+	Body      string `json:"body"`
+	Mergeable *bool  `json:"mergeable"`
+	Head      struct {
 		Ref string `json:"ref"`
+		SHA string `json:"sha"`
 	} `json:"head"`
 	Base struct {
 		Ref string `json:"ref"`
 	} `json:"base"`
+	RequestedReviewers []struct{} `json:"requested_reviewers"`
+}
+
+type forgejoPullReview struct {
+	ID        int64  `json:"id"`
+	State     string `json:"state"`
+	Dismissed bool   `json:"dismissed"`
+	Stale     bool   `json:"stale"`
+	User      struct {
+		ID int64 `json:"id"`
+	} `json:"user"`
+}
+
+type forgejoCombinedStatus struct {
+	Statuses []struct {
+		Status string `json:"status"`
+	} `json:"statuses"`
 }
 
 func NewRESTAdapter(t transport) *RESTAdapter { return &RESTAdapter{transport: t} }
+
+func (a *RESTAdapter) ViewStatus(ctx context.Context, request applicationpullrequest.StatusRequest) (applicationpullrequest.StatusData, error) {
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/pulls/" + strconv.Itoa(request.Number)
+	response, err := a.transport.Do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return applicationpullrequest.StatusData{}, translateStatusError(err)
+	}
+	defer response.Body.Close()
+	var pull forgejoPullRequestDetail
+	if err := json.NewDecoder(response.Body).Decode(&pull); err != nil {
+		return applicationpullrequest.StatusData{}, apperror.New(apperror.Remote, "view pull request status", "")
+	}
+
+	result := applicationpullrequest.StatusData{
+		Number:    pull.Number,
+		Mergeable: applicationpullrequest.MergeableUnavailable,
+	}
+	if pull.Mergeable != nil {
+		result.Mergeable = applicationpullrequest.MergeableNo
+		if *pull.Mergeable {
+			result.Mergeable = applicationpullrequest.MergeableYes
+		}
+	}
+
+	reviews, available, err := a.reviews(ctx, path+"/reviews")
+	if err != nil {
+		return applicationpullrequest.StatusData{}, err
+	}
+	result.Reviews = reviews
+	result.ReviewsAvailable = available
+	result.RequestedReviewers = len(pull.RequestedReviewers)
+
+	if pull.Head.SHA != "" {
+		checkPath := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/commits/" + url.PathEscape(pull.Head.SHA) + "/status"
+		checks, available, err := a.checks(ctx, checkPath)
+		if err != nil {
+			return applicationpullrequest.StatusData{}, err
+		}
+		result.Checks = checks
+		result.ChecksAvailable = available
+	}
+	return result, nil
+}
+
+func (a *RESTAdapter) reviews(ctx context.Context, path string) ([]applicationpullrequest.Review, bool, error) {
+	const pageSize = 50
+	reviews := make([]forgejoPullReview, 0)
+	for page := 1; ; page++ {
+		query := url.Values{"page": {strconv.Itoa(page)}, "limit": {strconv.Itoa(pageSize)}}
+		response, err := a.transport.Do(ctx, http.MethodGet, path, query)
+		if err != nil {
+			if componentUnavailable(err) {
+				return nil, false, nil
+			}
+			return nil, false, translateStatusError(err)
+		}
+		var pageReviews []forgejoPullReview
+		decodeErr := json.NewDecoder(response.Body).Decode(&pageReviews)
+		response.Body.Close()
+		if decodeErr != nil {
+			return nil, false, apperror.New(apperror.Remote, "view pull request status", "")
+		}
+		reviews = append(reviews, pageReviews...)
+		if len(pageReviews) < pageSize {
+			break
+		}
+	}
+	result := make([]applicationpullrequest.Review, 0, len(reviews))
+	for _, review := range reviews {
+		result = append(result, applicationpullrequest.Review{ID: review.ID, ReviewerID: review.User.ID, State: review.State, Dismissed: review.Dismissed, Stale: review.Stale})
+	}
+	return result, true, nil
+}
+
+func (a *RESTAdapter) checks(ctx context.Context, path string) ([]string, bool, error) {
+	response, err := a.transport.Do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		if componentUnavailable(err) {
+			return nil, false, nil
+		}
+		return nil, false, translateStatusError(err)
+	}
+	defer response.Body.Close()
+	var combined forgejoCombinedStatus
+	if err := json.NewDecoder(response.Body).Decode(&combined); err != nil {
+		return nil, false, apperror.New(apperror.Remote, "view pull request status", "")
+	}
+	result := make([]string, 0, len(combined.Statuses))
+	for _, status := range combined.Statuses {
+		result = append(result, status.Status)
+	}
+	return result, true, nil
+}
+
+func componentUnavailable(err error) bool {
+	var status interface{ StatusCode() int }
+	return errors.As(err, &status) && status.StatusCode() == http.StatusNotFound
+}
 
 func (a *RESTAdapter) Create(ctx context.Context, request applicationpullrequest.CreateRequest) (applicationpullrequest.PullRequestDetail, error) {
 	jsonClient, ok := a.transport.(jsonTransport)
@@ -157,6 +275,20 @@ func translateCreateError(err error) error {
 	return apperror.New(apperror.Remote, "create pull request", "")
 }
 
+func translateStatusError(err error) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		switch status.StatusCode() {
+		case 401, 403:
+			return apperror.New(apperror.Authentication, "view pull request status", "")
+		case 404:
+			return apperror.New(apperror.NotFound, "view pull request status", "pull request not found")
+		}
+	}
+	return apperror.New(apperror.Remote, "view pull request status", "")
+}
+
 var _ applicationpullrequest.PullRequestLister = (*RESTAdapter)(nil)
 var _ applicationpullrequest.PullRequestInspector = (*RESTAdapter)(nil)
 var _ applicationpullrequest.PullRequestCreator = (*RESTAdapter)(nil)
+var _ applicationpullrequest.StatusViewer = (*RESTAdapter)(nil)

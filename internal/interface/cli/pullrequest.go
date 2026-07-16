@@ -14,14 +14,52 @@ func newPullRequestCommand(lister applicationpullrequest.PullRequestLister) *cob
 }
 
 func newPullRequestCommandWithInspector(lister applicationpullrequest.PullRequestLister, inspector applicationpullrequest.PullRequestInspector) *cobra.Command {
-	return newPullRequestCommandWithDependencies(lister, inspector, nil)
+	return newPullRequestCommandWithDependencies(lister, inspector, nil, nil)
 }
 
-func newPullRequestCommandWithDependencies(lister applicationpullrequest.PullRequestLister, inspector applicationpullrequest.PullRequestInspector, creator applicationpullrequest.PullRequestCreator) *cobra.Command {
+func newPullRequestCommandWithDependencies(lister applicationpullrequest.PullRequestLister, inspector applicationpullrequest.PullRequestInspector, creator applicationpullrequest.PullRequestCreator, statusViewer applicationpullrequest.StatusViewer) *cobra.Command {
 	command := &cobra.Command{Use: "pr", Short: "Manage pull requests"}
 	command.AddCommand(newPullRequestListCommand(lister))
 	command.AddCommand(newPullRequestInspectCommand(inspector))
 	command.AddCommand(newPullRequestCreateCommand(creator))
+	command.AddCommand(newPullRequestStatusCommand(statusViewer))
+	return command
+}
+
+func newPullRequestStatusCommand(viewer applicationpullrequest.StatusViewer) *cobra.Command {
+	var instance string
+	command := &cobra.Command{Use: "status OWNER/NAME NUMBER", Short: "View pull request review and check status", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 2 {
+			return newCommandError(categoryValidation, "view pull request status", fmt.Errorf("OWNER/NAME and pull request number are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "view pull request status", err)
+		}
+		number, err := strconv.Atoi(args[1])
+		if err != nil || number < 1 {
+			return newCommandError(categoryValidation, "view pull request status", fmt.Errorf("pull request number must be a positive integer"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if viewer == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			viewer = dependencies.PullRequestStatusViewer
+			if viewer == nil {
+				return newCommandError(categoryInternal, "view pull request status", fmt.Errorf("pull request status viewer unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		result, err := applicationpullrequest.NewStatusUseCase(viewer).Execute(command.Context(), applicationpullrequest.StatusRequest{Owner: parts[0], Name: parts[1], Number: number})
+		if err != nil {
+			return mapApplicationError(err, "view pull request status")
+		}
+		return (pullRequestPresenter{}).PresentStatus(command.OutOrStdout(), result)
+	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 
