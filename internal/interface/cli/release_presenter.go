@@ -76,3 +76,8 @@ func (releasePresenter) PresentUpdated(w io.Writer, detail applicationrelease.Re
 	_, err := fmt.Fprintf(w, "Release updated: %s\nChanged fields: %s\nState: %s\n", detail.TagName, strings.Join(fields, ", "), state)
 	return err
 }
+
+func (releasePresenter) PresentPublished(w io.Writer, detail applicationrelease.ReleaseDetail) error {
+	_, err := fmt.Fprintf(w, "Release published: %s\nTitle: %s\n", detail.TagName, detail.Title)
+	return err
+}

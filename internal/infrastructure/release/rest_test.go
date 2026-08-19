@@ -298,3 +298,46 @@ func TestRESTAdapterUpdateMapsPatchHTTPError(t *testing.T) {
 		}
 	}
 }
+
+func TestRESTAdapterPublishSendsDraftFalsePayload(t *testing.T) {
+	transport := &jsonStubTransport{response: `{"id":7,"tag_name":"v1.0.0","name":"First release","draft":false,"prerelease":false}`}
+	result, err := NewRESTAdapter(transport).Publish(context.Background(), applicationrelease.PublishRequest{Owner: "alice", Name: "project", ID: 7})
+	if err != nil || result.TagName != "v1.0.0" || result.Draft {
+		t.Fatalf("unexpected result: %+v err=%v", result, err)
+	}
+	if transport.method != http.MethodPatch || transport.path != "/api/v1/repos/alice/project/releases/7" {
+		t.Fatalf("unexpected request: method=%s path=%s", transport.method, transport.path)
+	}
+	if string(transport.body) != `{"draft":false}` {
+		t.Fatalf("unexpected body: %s", transport.body)
+	}
+}
+
+func TestRESTAdapterPublishMapsHTTPError(t *testing.T) {
+	tests := []struct {
+		status   int
+		category apperror.Category
+	}{
+		{http.StatusUnauthorized, apperror.Authentication},
+		{http.StatusForbidden, apperror.Authentication},
+		{http.StatusNotFound, apperror.NotFound},
+		{http.StatusConflict, apperror.Conflict},
+		{http.StatusUnprocessableEntity, apperror.Conflict},
+		{http.StatusInternalServerError, apperror.Remote},
+	}
+	for _, test := range tests {
+		_, err := NewRESTAdapter(&jsonStubTransport{err: statusError(test.status)}).Publish(context.Background(), applicationrelease.PublishRequest{Owner: "alice", Name: "project", ID: 7})
+		var appErr apperror.Error
+		if !errors.As(err, &appErr) || appErr.Category != test.category {
+			t.Fatalf("status %d: unexpected error %#v", test.status, err)
+		}
+	}
+}
+
+func TestRESTAdapterPublishMapsNotFoundSafely(t *testing.T) {
+	_, err := NewRESTAdapter(&jsonStubTransport{err: statusError(http.StatusNotFound)}).Publish(context.Background(), applicationrelease.PublishRequest{Owner: "alice", Name: "project", ID: 7})
+	var appErr apperror.Error
+	if !errors.As(err, &appErr) || appErr.Category != apperror.NotFound || appErr.Message != "release not found" {
+		t.Fatalf("error = %#v, want safe not-found application error", err)
+	}
+}

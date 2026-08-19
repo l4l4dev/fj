@@ -234,3 +234,67 @@ func TestReleaseUpdateRejectsInvalidInput(t *testing.T) {
 		}
 	}
 }
+
+type releasePublisherStub struct {
+	called  bool
+	request applicationrelease.PublishRequest
+	detail  applicationrelease.ReleaseDetail
+}
+
+func (s *releasePublisherStub) Publish(_ context.Context, request applicationrelease.PublishRequest) (applicationrelease.ReleaseDetail, error) {
+	s.called = true
+	s.request = request
+	return s.detail, nil
+}
+
+func TestReleasePublishOutputAndRequest(t *testing.T) {
+	inspector := &releaseInspectorStub{detail: applicationrelease.ReleaseDetail{ID: 7, TagName: "v1.0.0", Title: "First release", Draft: true}}
+	publisher := &releasePublisherStub{detail: applicationrelease.ReleaseDetail{ID: 7, TagName: "v1.0.0", Title: "First release", Draft: false}}
+	command := newReleasePublishCommand(inspector, publisher)
+	command.SetArgs([]string{"alice/project", "v1.0.0"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !publisher.called || publisher.request.ID != 7 || publisher.request.Owner != "alice" || publisher.request.Name != "project" {
+		t.Fatalf("unexpected request: %+v", publisher.request)
+	}
+	if output.String() != "Release published: v1.0.0\nTitle: First release\n" {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+}
+
+func TestReleasePublishRejectsAlreadyPublished(t *testing.T) {
+	inspector := &releaseInspectorStub{detail: applicationrelease.ReleaseDetail{ID: 7, TagName: "v1.0.0", Draft: false}}
+	publisher := &releasePublisherStub{}
+	command := newReleasePublishCommand(inspector, publisher)
+	command.SetArgs([]string{"alice/project", "v1.0.0"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err == nil {
+		t.Fatal("expected an error when the release is already published")
+	}
+	if publisher.called {
+		t.Fatal("publisher must not be called when the release is already published")
+	}
+	if strings.Contains(output.String(), "Release published:") {
+		t.Fatalf("expected no success output on failure, got %q", output.String())
+	}
+}
+
+func TestReleasePublishRejectsInvalidInput(t *testing.T) {
+	tests := [][]string{
+		{"alice/project"},
+		{"invalid", "v1.0.0"},
+		{"alice/project", "  "},
+		{},
+	}
+	for _, args := range tests {
+		command := newReleasePublishCommand(&releaseInspectorStub{}, &releasePublisherStub{})
+		command.SetArgs(args)
+		if err := command.Execute(); err == nil {
+			t.Fatalf("expected validation error for %v", args)
+		}
+	}
+}

@@ -13,6 +13,7 @@ type releaseDependencies struct {
 	inspector applicationrelease.Inspector
 	creator   applicationrelease.Creator
 	updater   applicationrelease.Updater
+	publisher applicationrelease.Publisher
 }
 
 func newReleaseCommand(dependencies releaseDependencies) *cobra.Command {
@@ -21,6 +22,7 @@ func newReleaseCommand(dependencies releaseDependencies) *cobra.Command {
 	command.AddCommand(newReleaseInspectCommand(dependencies.inspector))
 	command.AddCommand(newReleaseCreateCommand(dependencies.creator))
 	command.AddCommand(newReleaseUpdateCommand(dependencies.updater))
+	command.AddCommand(newReleasePublishCommand(dependencies.inspector, dependencies.publisher))
 	return command
 }
 
@@ -95,6 +97,46 @@ func newReleaseInspectCommand(inspector applicationrelease.Inspector) *cobra.Com
 			return mapApplicationError(err, "inspect release")
 		}
 		return (releasePresenter{}).PresentInspect(command.OutOrStdout(), result)
+	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
+	return command
+}
+
+func newReleasePublishCommand(inspector applicationrelease.Inspector, publisher applicationrelease.Publisher) *cobra.Command {
+	var instance string
+	command := &cobra.Command{Use: "publish OWNER/NAME TAG", Short: "Publish a draft release", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 2 {
+			return newCommandError(categoryValidation, "publish release", fmt.Errorf("OWNER/NAME and release tag are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "publish release", err)
+		}
+		if strings.TrimSpace(args[1]) == "" {
+			return newCommandError(categoryValidation, "publish release", fmt.Errorf("release tag is required"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if inspector == nil || publisher == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			if inspector == nil {
+				inspector = dependencies.ReleaseInspector
+			}
+			if publisher == nil {
+				publisher = dependencies.ReleasePublisher
+			}
+			if inspector == nil || publisher == nil {
+				return newCommandError(categoryInternal, "publish release", fmt.Errorf("release publisher unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		result, err := applicationrelease.NewPublishUseCase(inspector, publisher).Execute(command.Context(), applicationrelease.InspectRequest{Owner: parts[0], Name: parts[1], Tag: args[1]})
+		if err != nil {
+			return mapApplicationError(err, "publish release")
+		}
+		return (releasePresenter{}).PresentPublished(command.OutOrStdout(), result)
 	}}
 	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command

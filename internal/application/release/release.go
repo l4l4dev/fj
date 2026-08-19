@@ -72,3 +72,13 @@ type UpdateRequest struct {
 type Updater interface {
 	Update(context.Context, UpdateRequest) (ReleaseDetail, error)
 }
+
+type PublishRequest struct {
+	Owner string
+	Name  string
+	ID    int64
+}
+
+type Publisher interface {
+	Publish(context.Context, PublishRequest) (ReleaseDetail, error)
+}

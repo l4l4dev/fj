@@ -165,6 +165,49 @@ func (a *RESTAdapter) Update(ctx context.Context, request applicationrelease.Upd
 	return applicationrelease.ReleaseDetail{ID: decoded.ID, TagName: decoded.TagName, Title: decoded.Name, Draft: decoded.Draft, Prerelease: decoded.Prerelease, Notes: decoded.Body, Assets: assets}, nil
 }
 
+func (a *RESTAdapter) Publish(ctx context.Context, request applicationrelease.PublishRequest) (applicationrelease.ReleaseDetail, error) {
+	jsonClient, ok := a.transport.(jsonTransport)
+	if !ok {
+		return applicationrelease.ReleaseDetail{}, apperror.New(apperror.Remote, "publish release", "")
+	}
+	body, err := json.Marshal(struct {
+		Draft bool `json:"draft"`
+	}{Draft: false})
+	if err != nil {
+		return applicationrelease.ReleaseDetail{}, apperror.New(apperror.Remote, "publish release", "")
+	}
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/releases/" + strconv.FormatInt(request.ID, 10)
+	response, err := jsonClient.DoJSON(ctx, http.MethodPatch, path, nil, body)
+	if err != nil {
+		return applicationrelease.ReleaseDetail{}, translatePublishError(err)
+	}
+	defer response.Body.Close()
+	var decoded forgejoReleaseDetail
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationrelease.ReleaseDetail{}, apperror.New(apperror.Remote, "publish release", "")
+	}
+	assets := make([]applicationrelease.Asset, 0, len(decoded.Assets))
+	for _, asset := range decoded.Assets {
+		assets = append(assets, applicationrelease.Asset{ID: asset.ID, Name: asset.Name, Size: asset.Size})
+	}
+	return applicationrelease.ReleaseDetail{ID: decoded.ID, TagName: decoded.TagName, Title: decoded.Name, Draft: decoded.Draft, Prerelease: decoded.Prerelease, Notes: decoded.Body, Assets: assets}, nil
+}
+
+func translatePublishError(err error) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		switch status.StatusCode() {
+		case 401, 403:
+			return apperror.New(apperror.Authentication, "publish release", "permission denied or authentication failed")
+		case 404:
+			return apperror.New(apperror.NotFound, "publish release", "release not found")
+		case 409, 422:
+			return apperror.New(apperror.Conflict, "publish release", "release could not be published in its current state")
+		}
+	}
+	return apperror.New(apperror.Remote, "publish release", "")
+}
+
 func translateUpdateError(err error) error {
 	var status interface{ StatusCode() int }
 	if errors.As(err, &status) {
@@ -227,3 +270,4 @@ var _ applicationrelease.Lister = (*RESTAdapter)(nil)
 var _ applicationrelease.Inspector = (*RESTAdapter)(nil)
 var _ applicationrelease.Creator = (*RESTAdapter)(nil)
 var _ applicationrelease.Updater = (*RESTAdapter)(nil)
+var _ applicationrelease.Publisher = (*RESTAdapter)(nil)
