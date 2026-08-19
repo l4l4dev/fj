@@ -292,3 +292,59 @@ func TestRESTAdapterAddCommentMapsHTTPError(t *testing.T) {
 		}
 	}
 }
+
+func TestRESTAdapterMergeSendsExplicitMethod(t *testing.T) {
+	stub := &jsonStubTransport{response: `{}`}
+	err := NewRESTAdapter(stub).Merge(context.Background(), applicationpullrequest.MergeRequest{Owner: "alice", Name: "project", Number: 12, Method: applicationpullrequest.MergeMethodSquash})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stub.method != http.MethodPost || stub.path != "/api/v1/repos/alice/project/pulls/12/merge" {
+		t.Fatalf("unexpected request: %s %s", stub.method, stub.path)
+	}
+	if string(stub.body) != `{"Do":"squash"}` {
+		t.Fatalf("unexpected payload: %s", stub.body)
+	}
+}
+
+func TestRESTAdapterMergeMapsHTTPError(t *testing.T) {
+	tests := []struct {
+		status   int
+		category apperror.Category
+	}{
+		{401, apperror.Authentication},
+		{403, apperror.Authentication},
+		{404, apperror.NotFound},
+		{405, apperror.Conflict},
+		{409, apperror.Conflict},
+		{500, apperror.Remote},
+	}
+	for _, test := range tests {
+		stub := &jsonStubTransport{err: statusError(test.status)}
+		err := NewRESTAdapter(stub).Merge(context.Background(), applicationpullrequest.MergeRequest{Owner: "alice", Name: "project", Number: 12, Method: applicationpullrequest.MergeMethodMerge})
+		var appErr apperror.Error
+		if !errors.As(err, &appErr) || appErr.Category != test.category {
+			t.Fatalf("status %d: unexpected error %v", test.status, err)
+		}
+	}
+}
+
+func TestRESTAdapterCloseSendsClosedState(t *testing.T) {
+	stub := &jsonStubTransport{response: `{"number":12,"title":"Improve flow","state":"closed","head":{"ref":"feature"},"base":{"ref":"main"}}`}
+	detail, err := NewRESTAdapter(stub).Close(context.Background(), applicationpullrequest.CloseRequest{Owner: "alice", Name: "project", Number: 12})
+	if err != nil || detail.State != applicationpullrequest.StateClosed {
+		t.Fatalf("unexpected result: %+v err=%v", detail, err)
+	}
+	if stub.method != http.MethodPatch || stub.path != "/api/v1/repos/alice/project/pulls/12" || string(stub.body) != `{"state":"closed"}` {
+		t.Fatalf("unexpected request: %s %s %s", stub.method, stub.path, stub.body)
+	}
+}
+
+func TestRESTAdapterCloseMapsHTTPError(t *testing.T) {
+	stub := &jsonStubTransport{err: statusError(404)}
+	_, err := NewRESTAdapter(stub).Close(context.Background(), applicationpullrequest.CloseRequest{Owner: "alice", Name: "project", Number: 12})
+	var appErr apperror.Error
+	if !errors.As(err, &appErr) || appErr.Category != apperror.NotFound {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

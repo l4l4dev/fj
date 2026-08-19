@@ -41,6 +41,16 @@ func (pullRequestPresenter) PresentComment(w io.Writer, comment applicationpullr
 	return err
 }
 
+func (pullRequestPresenter) PresentMerged(w io.Writer, number int, method string) error {
+	_, err := fmt.Fprintf(w, "Pull request merged: #%d (%s)\n", number, method)
+	return err
+}
+
+func (pullRequestPresenter) PresentClosed(w io.Writer, detail applicationpullrequest.PullRequestDetail) error {
+	_, err := fmt.Fprintf(w, "Pull request closed: #%d\nState: %s\n", detail.Number, detail.State)
+	return err
+}
+
 func (pullRequestPresenter) PresentStatus(w io.Writer, status applicationpullrequest.PullRequestStatus) error {
 	_, err := fmt.Fprintf(w, "Pull request: #%d\nReview: %s\nChecks: %s\nMergeable: %s\n", status.Number, status.Review, status.Check, status.Mergeable)
 	return err

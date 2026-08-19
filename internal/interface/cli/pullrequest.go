@@ -18,6 +18,8 @@ type pullRequestDependencies struct {
 	reviewSubmitter applicationpullrequest.ReviewSubmitter
 	commentViewer   applicationpullrequest.CommentViewer
 	commentCreator  applicationpullrequest.CommentCreator
+	merger          applicationpullrequest.Merger
+	closer          applicationpullrequest.Closer
 }
 
 func newPullRequestCommand(dependencies pullRequestDependencies) *cobra.Command {
@@ -29,6 +31,68 @@ func newPullRequestCommand(dependencies pullRequestDependencies) *cobra.Command 
 	command.AddCommand(newPullRequestStatusCommand(dependencies.statusViewer))
 	command.AddCommand(newPullRequestReviewCommand(dependencies.reviewSubmitter))
 	command.AddCommand(newPullRequestCommentCommand(dependencies.commentViewer, dependencies.commentCreator))
+	command.AddCommand(newPullRequestMergeCommand(dependencies.merger))
+	command.AddCommand(newPullRequestCloseCommand(dependencies.closer))
+	return command
+}
+
+func newPullRequestMergeCommand(merger applicationpullrequest.Merger) *cobra.Command {
+	var instance, method string
+	command := &cobra.Command{Use: "merge OWNER/NAME NUMBER", Short: "Merge a pull request", Args: func(_ *cobra.Command, args []string) error {
+		if err := validatePullRequestTargetArgs(args, "merge pull request"); err != nil {
+			return err
+		}
+		if method != "merge" && method != "rebase" && method != "squash" {
+			return newCommandError(categoryValidation, "merge pull request", fmt.Errorf("--method must be merge, rebase, or squash"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if merger == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			merger = dependencies.PullRequestMerger
+			if merger == nil {
+				return newCommandError(categoryInternal, "merge pull request", fmt.Errorf("pull request merger unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		if err := applicationpullrequest.NewMergeUseCase(merger).Execute(command.Context(), applicationpullrequest.MergeRequest{Owner: parts[0], Name: parts[1], Number: number, Method: applicationpullrequest.MergeMethod(method)}); err != nil {
+			return mapApplicationError(err, "merge pull request")
+		}
+		return (pullRequestPresenter{}).PresentMerged(command.OutOrStdout(), number, method)
+	}}
+	command.Flags().StringVar(&method, "method", "", "merge method (merge, rebase, or squash); required")
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
+	return command
+}
+
+func newPullRequestCloseCommand(closer applicationpullrequest.Closer) *cobra.Command {
+	var instance string
+	command := &cobra.Command{Use: "close OWNER/NAME NUMBER", Short: "Close a pull request without merging", Args: func(_ *cobra.Command, args []string) error {
+		return validatePullRequestTargetArgs(args, "close pull request")
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if closer == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			closer = dependencies.PullRequestCloser
+			if closer == nil {
+				return newCommandError(categoryInternal, "close pull request", fmt.Errorf("pull request closer unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		detail, err := applicationpullrequest.NewCloseUseCase(closer).Execute(command.Context(), applicationpullrequest.CloseRequest{Owner: parts[0], Name: parts[1], Number: number})
+		if err != nil {
+			return mapApplicationError(err, "close pull request")
+		}
+		return (pullRequestPresenter{}).PresentClosed(command.OutOrStdout(), detail)
+	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 

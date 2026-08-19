@@ -283,6 +283,50 @@ func (a *RESTAdapter) AddComment(ctx context.Context, request applicationpullreq
 	return applicationpullrequest.Comment{ID: decoded.ID, Body: decoded.Body}, nil
 }
 
+func (a *RESTAdapter) Merge(ctx context.Context, request applicationpullrequest.MergeRequest) error {
+	jsonClient, ok := a.transport.(jsonTransport)
+	if !ok {
+		return apperror.New(apperror.Remote, "merge pull request", "")
+	}
+	body, err := json.Marshal(struct {
+		Do applicationpullrequest.MergeMethod `json:"Do"`
+	}{Do: request.Method})
+	if err != nil {
+		return apperror.New(apperror.Remote, "merge pull request", "")
+	}
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/pulls/" + strconv.Itoa(request.Number) + "/merge"
+	response, err := jsonClient.DoJSON(ctx, http.MethodPost, path, nil, body)
+	if err != nil {
+		return translateMergeError(err)
+	}
+	response.Body.Close()
+	return nil
+}
+
+func (a *RESTAdapter) Close(ctx context.Context, request applicationpullrequest.CloseRequest) (applicationpullrequest.PullRequestDetail, error) {
+	jsonClient, ok := a.transport.(jsonTransport)
+	if !ok {
+		return applicationpullrequest.PullRequestDetail{}, apperror.New(apperror.Remote, "close pull request", "")
+	}
+	body, err := json.Marshal(struct {
+		State string `json:"state"`
+	}{State: "closed"})
+	if err != nil {
+		return applicationpullrequest.PullRequestDetail{}, apperror.New(apperror.Remote, "close pull request", "")
+	}
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/pulls/" + strconv.Itoa(request.Number)
+	response, err := jsonClient.DoJSON(ctx, http.MethodPatch, path, nil, body)
+	if err != nil {
+		return applicationpullrequest.PullRequestDetail{}, translateCloseError(err)
+	}
+	defer response.Body.Close()
+	var decoded forgejoPullRequestDetail
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationpullrequest.PullRequestDetail{}, apperror.New(apperror.Remote, "close pull request", "")
+	}
+	return applicationpullrequest.PullRequestDetail{Number: decoded.Number, Title: decoded.Title, State: applicationpullrequest.State(decoded.State), HeadBranch: decoded.Head.Ref, BaseBranch: decoded.Base.Ref, Body: decoded.Body}, nil
+}
+
 func (a *RESTAdapter) Update(ctx context.Context, request applicationpullrequest.UpdateRequest) (applicationpullrequest.PullRequestDetail, error) {
 	jsonClient, ok := a.transport.(jsonTransport)
 	if !ok {
@@ -394,6 +438,38 @@ func translateCreateError(err error) error {
 	return apperror.New(apperror.Remote, "create pull request", "")
 }
 
+func translateMergeError(err error) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		switch status.StatusCode() {
+		case 401, 403:
+			return apperror.New(apperror.Authentication, "merge pull request", "permission denied or authentication failed")
+		case 404:
+			return apperror.New(apperror.NotFound, "merge pull request", "pull request not found")
+		case 405:
+			return apperror.New(apperror.Conflict, "merge pull request", "pull request is not ready to merge")
+		case 409:
+			return apperror.New(apperror.Conflict, "merge pull request", "merge conflict or the merge method is not allowed")
+		}
+	}
+	return apperror.New(apperror.Remote, "merge pull request", "")
+}
+
+func translateCloseError(err error) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		switch status.StatusCode() {
+		case 401, 403:
+			return apperror.New(apperror.Authentication, "close pull request", "permission denied or authentication failed")
+		case 404:
+			return apperror.New(apperror.NotFound, "close pull request", "pull request not found")
+		case 409, 422:
+			return apperror.New(apperror.Conflict, "close pull request", "pull request could not be closed in its current state")
+		}
+	}
+	return apperror.New(apperror.Remote, "close pull request", "")
+}
+
 func translateCommentError(err error, operation string) error {
 	var status interface{ StatusCode() int }
 	if errors.As(err, &status) {
@@ -460,5 +536,7 @@ var _ applicationpullrequest.PullRequestCreator = (*RESTAdapter)(nil)
 var _ applicationpullrequest.Updater = (*RESTAdapter)(nil)
 var _ applicationpullrequest.CommentViewer = (*RESTAdapter)(nil)
 var _ applicationpullrequest.CommentCreator = (*RESTAdapter)(nil)
+var _ applicationpullrequest.Merger = (*RESTAdapter)(nil)
+var _ applicationpullrequest.Closer = (*RESTAdapter)(nil)
 var _ applicationpullrequest.StatusViewer = (*RESTAdapter)(nil)
 var _ applicationpullrequest.ReviewSubmitter = (*RESTAdapter)(nil)

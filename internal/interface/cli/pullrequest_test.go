@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4l4dev/fj/internal/application/apperror"
 	applicationpullrequest "github.com/l4l4dev/fj/internal/application/pullrequest"
 )
 
@@ -266,5 +267,89 @@ func TestPullRequestCommentRejectsInvalidInput(t *testing.T) {
 		if err := command.Execute(); err == nil {
 			t.Fatalf("expected validation error for add %v", args)
 		}
+	}
+}
+
+type pullRequestMergerStub struct {
+	request applicationpullrequest.MergeRequest
+	err     error
+}
+
+func (stub *pullRequestMergerStub) Merge(_ context.Context, request applicationpullrequest.MergeRequest) error {
+	stub.request = request
+	return stub.err
+}
+
+type pullRequestCloserStub struct {
+	request applicationpullrequest.CloseRequest
+}
+
+func (stub *pullRequestCloserStub) Close(_ context.Context, request applicationpullrequest.CloseRequest) (applicationpullrequest.PullRequestDetail, error) {
+	stub.request = request
+	return applicationpullrequest.PullRequestDetail{Number: request.Number, State: applicationpullrequest.StateClosed}, nil
+}
+
+func TestPullRequestMergeRequiresExplicitMethod(t *testing.T) {
+	tests := [][]string{
+		{"alice/project", "12"},
+		{"alice/project", "12", "--method", "fast-forward"},
+		{"alice/project", "0", "--method", "merge"},
+		{"invalid", "12", "--method", "merge"},
+	}
+	for _, args := range tests {
+		command := newPullRequestMergeCommand(&pullRequestMergerStub{})
+		command.SetArgs(args)
+		if err := command.Execute(); err == nil {
+			t.Fatalf("expected validation error for %v", args)
+		}
+	}
+}
+
+func TestPullRequestMergeOutputAndRequest(t *testing.T) {
+	merger := &pullRequestMergerStub{}
+	command := newPullRequestMergeCommand(merger)
+	command.SetArgs([]string{"alice/project", "12", "--method", "squash"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if merger.request.Method != applicationpullrequest.MergeMethodSquash || merger.request.Number != 12 {
+		t.Fatalf("unexpected request: %+v", merger.request)
+	}
+	if output.String() != "Pull request merged: #12 (squash)\n" {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+}
+
+func TestPullRequestMergeFailureProducesNoSuccessOutput(t *testing.T) {
+	merger := &pullRequestMergerStub{err: apperror.New(apperror.Conflict, "merge pull request", "pull request is not ready to merge")}
+	command := newPullRequestMergeCommand(merger)
+	command.SetArgs([]string{"alice/project", "12", "--method", "merge"})
+	var output strings.Builder
+	command.SetOut(&output)
+	err := command.Execute()
+	if err == nil {
+		t.Fatal("expected merge failure to surface as an error")
+	}
+	if strings.Contains(output.String(), "merged") {
+		t.Fatalf("expected no success output on failure, got %q", output.String())
+	}
+}
+
+func TestPullRequestCloseOutputAndRequest(t *testing.T) {
+	closer := &pullRequestCloserStub{}
+	command := newPullRequestCloseCommand(closer)
+	command.SetArgs([]string{"alice/project", "12"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if closer.request.Number != 12 {
+		t.Fatalf("unexpected request: %+v", closer.request)
+	}
+	if output.String() != "Pull request closed: #12\nState: closed\n" {
+		t.Fatalf("unexpected output: %q", output.String())
 	}
 }

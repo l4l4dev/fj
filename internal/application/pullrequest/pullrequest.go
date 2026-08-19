@@ -125,6 +125,35 @@ type StatusViewer interface {
 	ViewStatus(context.Context, StatusRequest) (StatusData, error)
 }
 
+type MergeMethod string
+
+const (
+	MergeMethodMerge  MergeMethod = "merge"
+	MergeMethodRebase MergeMethod = "rebase"
+	MergeMethodSquash MergeMethod = "squash"
+)
+
+type MergeRequest struct {
+	Owner  string
+	Name   string
+	Number int
+	Method MergeMethod
+}
+
+type Merger interface {
+	Merge(context.Context, MergeRequest) error
+}
+
+type CloseRequest struct {
+	Owner  string
+	Name   string
+	Number int
+}
+
+type Closer interface {
+	Close(context.Context, CloseRequest) (PullRequestDetail, error)
+}
+
 type Comment struct {
 	ID   int64
 	Body string
