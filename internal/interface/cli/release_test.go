@@ -171,3 +171,66 @@ func TestReleaseCreateRejectsInvalidInput(t *testing.T) {
 		}
 	}
 }
+
+type releaseUpdaterStub struct {
+	request applicationrelease.UpdateRequest
+	detail  applicationrelease.ReleaseDetail
+}
+
+func (stub *releaseUpdaterStub) Update(_ context.Context, request applicationrelease.UpdateRequest) (applicationrelease.ReleaseDetail, error) {
+	stub.request = request
+	if stub.detail.TagName == "" {
+		stub.detail.TagName = request.Tag
+	}
+	return stub.detail, nil
+}
+
+func TestReleaseUpdateSendsOnlyChangedTitleField(t *testing.T) {
+	updater := &releaseUpdaterStub{}
+	command := newReleaseUpdateCommand(updater)
+	command.SetArgs([]string{"alice/project", "v1.0.0", "--title", "New title"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if updater.request.Title == nil || *updater.request.Title != "New title" || updater.request.Notes != nil || updater.request.Prerelease != nil {
+		t.Fatalf("unexpected request: %+v", updater.request)
+	}
+	if output.String() != "Release updated: v1.0.0\nChanged fields: title\nState: published\n" {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+}
+
+func TestReleaseUpdateSendsOnlyChangedPrereleaseField(t *testing.T) {
+	updater := &releaseUpdaterStub{detail: applicationrelease.ReleaseDetail{TagName: "v1.0.0", Prerelease: false}}
+	command := newReleaseUpdateCommand(updater)
+	command.SetArgs([]string{"alice/project", "v1.0.0", "--prerelease=false"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if updater.request.Title != nil || updater.request.Notes != nil || updater.request.Prerelease == nil || *updater.request.Prerelease != false {
+		t.Fatalf("unexpected request: %+v", updater.request)
+	}
+	if output.String() != "Release updated: v1.0.0\nChanged fields: prerelease\nState: published\n" {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+}
+
+func TestReleaseUpdateRejectsInvalidInput(t *testing.T) {
+	tests := [][]string{
+		{"alice/project", "v1.0.0"},
+		{"alice/project", "  ", "--title", "New title"},
+		{"invalid", "v1.0.0", "--title", "New title"},
+		{"alice/project"},
+	}
+	for _, args := range tests {
+		command := newReleaseUpdateCommand(&releaseUpdaterStub{})
+		command.SetArgs(args)
+		if err := command.Execute(); err == nil {
+			t.Fatalf("expected validation error for %v", args)
+		}
+	}
+}

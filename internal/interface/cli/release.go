@@ -12,6 +12,7 @@ type releaseDependencies struct {
 	lister    applicationrelease.Lister
 	inspector applicationrelease.Inspector
 	creator   applicationrelease.Creator
+	updater   applicationrelease.Updater
 }
 
 func newReleaseCommand(dependencies releaseDependencies) *cobra.Command {
@@ -19,6 +20,7 @@ func newReleaseCommand(dependencies releaseDependencies) *cobra.Command {
 	command.AddCommand(newReleaseListCommand(dependencies.lister))
 	command.AddCommand(newReleaseInspectCommand(dependencies.inspector))
 	command.AddCommand(newReleaseCreateCommand(dependencies.creator))
+	command.AddCommand(newReleaseUpdateCommand(dependencies.updater))
 	return command
 }
 
@@ -94,6 +96,66 @@ func newReleaseInspectCommand(inspector applicationrelease.Inspector) *cobra.Com
 		}
 		return (releasePresenter{}).PresentInspect(command.OutOrStdout(), result)
 	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
+	return command
+}
+
+func newReleaseUpdateCommand(updater applicationrelease.Updater) *cobra.Command {
+	var instance, title, notes string
+	var prerelease bool
+	var titleSet, notesSet, prereleaseSet bool
+	command := &cobra.Command{Use: "update OWNER/NAME TAG", Short: "Update release metadata", Args: func(command *cobra.Command, args []string) error {
+		titleSet = command.Flags().Changed("title")
+		notesSet = command.Flags().Changed("notes")
+		prereleaseSet = command.Flags().Changed("prerelease")
+		if len(args) != 2 {
+			return newCommandError(categoryValidation, "update release", fmt.Errorf("OWNER/NAME and release tag are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "update release", err)
+		}
+		if strings.TrimSpace(args[1]) == "" {
+			return newCommandError(categoryValidation, "update release", fmt.Errorf("release tag is required"))
+		}
+		if !titleSet && !notesSet && !prereleaseSet {
+			return newCommandError(categoryValidation, "update release", fmt.Errorf("at least one release field is required"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if updater == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			updater = dependencies.ReleaseUpdater
+			if updater == nil {
+				return newCommandError(categoryInternal, "update release", fmt.Errorf("release updater unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		request := applicationrelease.UpdateRequest{Owner: parts[0], Name: parts[1], Tag: args[1]}
+		fields := make([]string, 0, 3)
+		if titleSet {
+			request.Title = &title
+			fields = append(fields, "title")
+		}
+		if notesSet {
+			request.Notes = &notes
+			fields = append(fields, "notes")
+		}
+		if prereleaseSet {
+			request.Prerelease = &prerelease
+			fields = append(fields, "prerelease")
+		}
+		result, err := applicationrelease.NewUpdateUseCase(updater).Execute(command.Context(), request)
+		if err != nil {
+			return mapApplicationError(err, "update release")
+		}
+		return (releasePresenter{}).PresentUpdated(command.OutOrStdout(), result, fields)
+	}}
+	command.Flags().StringVar(&title, "title", "", "release title")
+	command.Flags().StringVar(&notes, "notes", "", "release notes")
+	command.Flags().BoolVar(&prerelease, "prerelease", false, "mark the release as a prerelease")
 	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }

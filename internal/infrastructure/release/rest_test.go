@@ -212,3 +212,89 @@ func TestRESTAdapterCreateMapsNotFoundSafely(t *testing.T) {
 		t.Fatalf("error = %#v, want safe not-found application error", err)
 	}
 }
+
+type updateStubTransport struct {
+	getPath       string
+	getBody       string
+	getErr        error
+	patchMethod   string
+	patchPath     string
+	patchBody     []byte
+	patchErr      error
+	patchResponse string
+}
+
+func (stub *updateStubTransport) Do(_ context.Context, _ string, path string, _ url.Values) (*http.Response, error) {
+	stub.getPath = path
+	if stub.getErr != nil {
+		return nil, stub.getErr
+	}
+	body := stub.getBody
+	if body == "" {
+		body = `{"id":7,"tag_name":"v1.0.0","name":"First release","draft":true,"prerelease":false}`
+	}
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}, nil
+}
+
+func (stub *updateStubTransport) DoJSON(_ context.Context, method, path string, _ url.Values, body []byte) (*http.Response, error) {
+	stub.patchMethod, stub.patchPath, stub.patchBody = method, path, body
+	if stub.patchErr != nil {
+		return nil, stub.patchErr
+	}
+	response := stub.patchResponse
+	if response == "" {
+		response = `{"id":7,"tag_name":"v1.0.0","name":"Updated title","draft":true,"prerelease":true}`
+	}
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(response))}, nil
+}
+
+func TestRESTAdapterUpdateSendsOnlySuppliedFields(t *testing.T) {
+	transport := &updateStubTransport{}
+	title := "Updated title"
+	prerelease := true
+	result, err := NewRESTAdapter(transport).Update(context.Background(), applicationrelease.UpdateRequest{Owner: "alice", Name: "project", Tag: "v1.0.0", Title: &title, Prerelease: &prerelease})
+	if err != nil || result.Title != "Updated title" || !result.Prerelease {
+		t.Fatalf("unexpected result: %+v err=%v", result, err)
+	}
+	if transport.getPath != "/api/v1/repos/alice/project/releases/tags/v1.0.0" {
+		t.Fatalf("unexpected resolve path: %s", transport.getPath)
+	}
+	if transport.patchMethod != http.MethodPatch || transport.patchPath != "/api/v1/repos/alice/project/releases/7" {
+		t.Fatalf("unexpected patch request: method=%s path=%s", transport.patchMethod, transport.patchPath)
+	}
+	if string(transport.patchBody) != `{"name":"Updated title","prerelease":true}` {
+		t.Fatalf("unexpected payload: %s", transport.patchBody)
+	}
+}
+
+func TestRESTAdapterUpdateMapsResolveHTTPError(t *testing.T) {
+	title := "Updated title"
+	transport := &updateStubTransport{getErr: statusError(http.StatusNotFound)}
+	_, err := NewRESTAdapter(transport).Update(context.Background(), applicationrelease.UpdateRequest{Owner: "alice", Name: "project", Tag: "v1.0.0", Title: &title})
+	var appErr apperror.Error
+	if !errors.As(err, &appErr) || appErr.Category != apperror.NotFound || appErr.Message != "release not found" {
+		t.Fatalf("error = %#v, want safe not-found application error", err)
+	}
+}
+
+func TestRESTAdapterUpdateMapsPatchHTTPError(t *testing.T) {
+	tests := []struct {
+		status   int
+		category apperror.Category
+	}{
+		{http.StatusUnauthorized, apperror.Authentication},
+		{http.StatusForbidden, apperror.Authentication},
+		{http.StatusConflict, apperror.Validation},
+		{http.StatusUnprocessableEntity, apperror.Validation},
+		{http.StatusInternalServerError, apperror.Remote},
+	}
+	title := "Updated title"
+	for _, test := range tests {
+		transport := &updateStubTransport{patchErr: statusError(test.status)}
+		_, err := NewRESTAdapter(transport).Update(context.Background(), applicationrelease.UpdateRequest{Owner: "alice", Name: "project", Tag: "v1.0.0", Title: &title})
+		var appErr apperror.Error
+		if !errors.As(err, &appErr) || appErr.Category != test.category {
+			t.Fatalf("status %d: unexpected error %#v", test.status, err)
+		}
+	}
+}

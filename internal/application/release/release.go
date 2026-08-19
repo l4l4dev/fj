@@ -59,3 +59,16 @@ type CreateRequest struct {
 type Creator interface {
 	Create(context.Context, CreateRequest) (ReleaseDetail, error)
 }
+
+type UpdateRequest struct {
+	Owner      string
+	Name       string
+	Tag        string
+	Title      *string
+	Notes      *string
+	Prerelease *bool
+}
+
+type Updater interface {
+	Update(context.Context, UpdateRequest) (ReleaseDetail, error)
+}

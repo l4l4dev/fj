@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	applicationrelease "github.com/l4l4dev/fj/internal/application/release"
 )
@@ -62,5 +63,16 @@ func (releasePresenter) PresentInspect(w io.Writer, detail applicationrelease.Re
 
 func (releasePresenter) PresentCreated(w io.Writer, detail applicationrelease.ReleaseDetail) error {
 	_, err := fmt.Fprintf(w, "Release created as draft: %s\nTitle: %s\nPrerelease: %t\n", detail.TagName, detail.Title, detail.Prerelease)
+	return err
+}
+
+func (releasePresenter) PresentUpdated(w io.Writer, detail applicationrelease.ReleaseDetail, fields []string) error {
+	state := "published"
+	if detail.Draft {
+		state = "draft"
+	} else if detail.Prerelease {
+		state = "prerelease"
+	}
+	_, err := fmt.Fprintf(w, "Release updated: %s\nChanged fields: %s\nState: %s\n", detail.TagName, strings.Join(fields, ", "), state)
 	return err
 }

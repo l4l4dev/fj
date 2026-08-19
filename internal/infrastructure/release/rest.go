@@ -117,6 +117,69 @@ func (a *RESTAdapter) Create(ctx context.Context, request applicationrelease.Cre
 	return applicationrelease.ReleaseDetail{ID: decoded.ID, TagName: decoded.TagName, Title: decoded.Name, Draft: decoded.Draft, Prerelease: decoded.Prerelease, Notes: decoded.Body, Assets: assets}, nil
 }
 
+func (a *RESTAdapter) Update(ctx context.Context, request applicationrelease.UpdateRequest) (applicationrelease.ReleaseDetail, error) {
+	jsonClient, ok := a.transport.(jsonTransport)
+	if !ok {
+		return applicationrelease.ReleaseDetail{}, apperror.New(apperror.Remote, "update release", "")
+	}
+	tagPath := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/releases/tags/" + url.PathEscape(request.Tag)
+	tagResponse, err := a.transport.Do(ctx, http.MethodGet, tagPath, nil)
+	if err != nil {
+		return applicationrelease.ReleaseDetail{}, translateUpdateError(err)
+	}
+	var existing forgejoReleaseDetail
+	decodeErr := json.NewDecoder(tagResponse.Body).Decode(&existing)
+	tagResponse.Body.Close()
+	if decodeErr != nil {
+		return applicationrelease.ReleaseDetail{}, apperror.New(apperror.Remote, "update release", "")
+	}
+
+	payload := make(map[string]any)
+	if request.Title != nil {
+		payload["name"] = *request.Title
+	}
+	if request.Notes != nil {
+		payload["body"] = *request.Notes
+	}
+	if request.Prerelease != nil {
+		payload["prerelease"] = *request.Prerelease
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return applicationrelease.ReleaseDetail{}, apperror.New(apperror.Remote, "update release", "")
+	}
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/releases/" + strconv.FormatInt(existing.ID, 10)
+	response, err := jsonClient.DoJSON(ctx, http.MethodPatch, path, nil, body)
+	if err != nil {
+		return applicationrelease.ReleaseDetail{}, translateUpdateError(err)
+	}
+	defer response.Body.Close()
+	var decoded forgejoReleaseDetail
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationrelease.ReleaseDetail{}, apperror.New(apperror.Remote, "update release", "")
+	}
+	assets := make([]applicationrelease.Asset, 0, len(decoded.Assets))
+	for _, asset := range decoded.Assets {
+		assets = append(assets, applicationrelease.Asset{ID: asset.ID, Name: asset.Name, Size: asset.Size})
+	}
+	return applicationrelease.ReleaseDetail{ID: decoded.ID, TagName: decoded.TagName, Title: decoded.Name, Draft: decoded.Draft, Prerelease: decoded.Prerelease, Notes: decoded.Body, Assets: assets}, nil
+}
+
+func translateUpdateError(err error) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		switch status.StatusCode() {
+		case 401, 403:
+			return apperror.New(apperror.Authentication, "update release", "permission denied or authentication failed")
+		case 404:
+			return apperror.New(apperror.NotFound, "update release", "release not found")
+		case 409, 422:
+			return apperror.New(apperror.Validation, "update release", "release fields were rejected by the remote service")
+		}
+	}
+	return apperror.New(apperror.Remote, "update release", "")
+}
+
 func translateCreateError(err error) error {
 	var status interface{ StatusCode() int }
 	if errors.As(err, &status) {
@@ -163,3 +226,4 @@ func translateListError(err error) error {
 var _ applicationrelease.Lister = (*RESTAdapter)(nil)
 var _ applicationrelease.Inspector = (*RESTAdapter)(nil)
 var _ applicationrelease.Creator = (*RESTAdapter)(nil)
+var _ applicationrelease.Updater = (*RESTAdapter)(nil)
