@@ -30,3 +30,32 @@ func (releasePresenter) Present(w io.Writer, releases []applicationrelease.Relea
 	}
 	return nil
 }
+
+func (releasePresenter) PresentInspect(w io.Writer, detail applicationrelease.ReleaseDetail) error {
+	state := "published"
+	if detail.Draft {
+		state = "draft"
+	} else if detail.Prerelease {
+		state = "prerelease"
+	}
+	notes := detail.Notes
+	if notes == "" {
+		notes = "-"
+	}
+	if _, err := fmt.Fprintf(w, "Release: %s\nTitle: %s\nState: %s\nNotes: %s\n", detail.TagName, detail.Title, state, notes); err != nil {
+		return err
+	}
+	if len(detail.Assets) == 0 {
+		_, err := fmt.Fprintln(w, "Assets: none")
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "Assets:"); err != nil {
+		return err
+	}
+	for _, asset := range detail.Assets {
+		if _, err := fmt.Fprintf(w, "- #%d %s (%d bytes)\n", asset.ID, asset.Name, asset.Size); err != nil {
+			return err
+		}
+	}
+	return nil
+}

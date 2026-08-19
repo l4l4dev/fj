@@ -26,6 +26,20 @@ type forgejoRelease struct {
 	Prerelease bool   `json:"prerelease"`
 }
 
+type forgejoReleaseDetail struct {
+	ID         int64  `json:"id"`
+	TagName    string `json:"tag_name"`
+	Name       string `json:"name"`
+	Body       string `json:"body"`
+	Draft      bool   `json:"draft"`
+	Prerelease bool   `json:"prerelease"`
+	Assets     []struct {
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
+		Size int64  `json:"size"`
+	} `json:"assets"`
+}
+
 func NewRESTAdapter(t transport) *RESTAdapter { return &RESTAdapter{transport: t} }
 
 func (a *RESTAdapter) List(ctx context.Context, request applicationrelease.ListRequest) ([]applicationrelease.Release, error) {
@@ -49,6 +63,37 @@ func (a *RESTAdapter) List(ctx context.Context, request applicationrelease.ListR
 	return result, nil
 }
 
+func (a *RESTAdapter) Inspect(ctx context.Context, request applicationrelease.InspectRequest) (applicationrelease.ReleaseDetail, error) {
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/releases/tags/" + url.PathEscape(request.Tag)
+	response, err := a.transport.Do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return applicationrelease.ReleaseDetail{}, translateInspectError(err)
+	}
+	defer response.Body.Close()
+	var decoded forgejoReleaseDetail
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationrelease.ReleaseDetail{}, apperror.New(apperror.Remote, "inspect release", "")
+	}
+	assets := make([]applicationrelease.Asset, 0, len(decoded.Assets))
+	for _, asset := range decoded.Assets {
+		assets = append(assets, applicationrelease.Asset{ID: asset.ID, Name: asset.Name, Size: asset.Size})
+	}
+	return applicationrelease.ReleaseDetail{ID: decoded.ID, TagName: decoded.TagName, Title: decoded.Name, Draft: decoded.Draft, Prerelease: decoded.Prerelease, Notes: decoded.Body, Assets: assets}, nil
+}
+
+func translateInspectError(err error) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		switch status.StatusCode() {
+		case 401, 403:
+			return apperror.New(apperror.Authentication, "inspect release", "permission denied or authentication failed")
+		case 404:
+			return apperror.New(apperror.NotFound, "inspect release", "release not found")
+		}
+	}
+	return apperror.New(apperror.Remote, "inspect release", "")
+}
+
 func translateListError(err error) error {
 	var status interface{ StatusCode() int }
 	if errors.As(err, &status) {
@@ -63,3 +108,4 @@ func translateListError(err error) error {
 }
 
 var _ applicationrelease.Lister = (*RESTAdapter)(nil)
+var _ applicationrelease.Inspector = (*RESTAdapter)(nil)

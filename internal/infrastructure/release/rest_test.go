@@ -88,3 +88,55 @@ func TestRESTAdapterListMapsNotFoundSafely(t *testing.T) {
 		t.Fatalf("error = %#v, want safe not-found application error", err)
 	}
 }
+
+func TestRESTAdapterInspect(t *testing.T) {
+	transport := &stubTransport{body: `{"id":1,"tag_name":"v1.0.0","name":"First release","body":"Release notes","draft":false,"prerelease":false,"assets":[{"id":11,"name":"fj_darwin_arm64.tar.gz","size":1024}]}`}
+	result, err := NewRESTAdapter(transport).Inspect(context.Background(), applicationrelease.InspectRequest{Owner: "alice", Name: "project", Tag: "v1.0.0"})
+	if err != nil || result.TagName != "v1.0.0" || result.Title != "First release" || result.Notes != "Release notes" || result.Draft || result.Prerelease {
+		t.Fatalf("unexpected result: %+v err=%v", result, err)
+	}
+	if len(result.Assets) != 1 || result.Assets[0].ID != 11 || result.Assets[0].Name != "fj_darwin_arm64.tar.gz" || result.Assets[0].Size != 1024 {
+		t.Fatalf("unexpected assets: %+v", result.Assets)
+	}
+	if transport.path != "/api/v1/repos/alice/project/releases/tags/v1.0.0" {
+		t.Fatalf("unexpected path: %s", transport.path)
+	}
+}
+
+func TestRESTAdapterInspectEscapesTag(t *testing.T) {
+	transport := &stubTransport{body: `{}`}
+	_, err := NewRESTAdapter(transport).Inspect(context.Background(), applicationrelease.InspectRequest{Owner: "alice", Name: "project", Tag: "v1/rc1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if transport.path != "/api/v1/repos/alice/project/releases/tags/v1%2Frc1" {
+		t.Fatalf("unexpected path: %s", transport.path)
+	}
+}
+
+func TestRESTAdapterInspectMapsHTTPError(t *testing.T) {
+	tests := []struct {
+		status   int
+		category apperror.Category
+	}{
+		{http.StatusUnauthorized, apperror.Authentication},
+		{http.StatusForbidden, apperror.Authentication},
+		{http.StatusNotFound, apperror.NotFound},
+		{http.StatusInternalServerError, apperror.Remote},
+	}
+	for _, test := range tests {
+		_, err := NewRESTAdapter(errorTransport{err: statusError(test.status)}).Inspect(context.Background(), applicationrelease.InspectRequest{Owner: "alice", Name: "project", Tag: "v1.0.0"})
+		var appErr apperror.Error
+		if !errors.As(err, &appErr) || appErr.Category != test.category {
+			t.Fatalf("status %d: unexpected error %#v", test.status, err)
+		}
+	}
+}
+
+func TestRESTAdapterInspectMapsNotFoundSafely(t *testing.T) {
+	_, err := NewRESTAdapter(errorTransport{err: statusError(http.StatusNotFound)}).Inspect(context.Background(), applicationrelease.InspectRequest{Owner: "alice", Name: "project", Tag: "v1.0.0"})
+	var appErr apperror.Error
+	if !errors.As(err, &appErr) || appErr.Category != apperror.NotFound || appErr.Message != "release not found" {
+		t.Fatalf("error = %#v, want safe not-found application error", err)
+	}
+}

@@ -63,3 +63,67 @@ func TestReleaseListRejectsInvalidInput(t *testing.T) {
 		}
 	}
 }
+
+type releaseInspectorStub struct {
+	request applicationrelease.InspectRequest
+	detail  applicationrelease.ReleaseDetail
+}
+
+func (s *releaseInspectorStub) Inspect(_ context.Context, request applicationrelease.InspectRequest) (applicationrelease.ReleaseDetail, error) {
+	s.request = request
+	return s.detail, nil
+}
+
+func TestReleaseInspectOutputWithAssets(t *testing.T) {
+	inspector := &releaseInspectorStub{detail: applicationrelease.ReleaseDetail{
+		TagName: "v1.0.0",
+		Title:   "First release",
+		Notes:   "Release notes",
+		Assets:  []applicationrelease.Asset{{ID: 1, Name: "fj_darwin_arm64.tar.gz", Size: 1024}},
+	}}
+	command := newReleaseInspectCommand(inspector)
+	command.SetArgs([]string{"alice/project", "v1.0.0"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if inspector.request.Owner != "alice" || inspector.request.Name != "project" || inspector.request.Tag != "v1.0.0" {
+		t.Fatalf("unexpected request: %+v", inspector.request)
+	}
+	want := "Release: v1.0.0\nTitle: First release\nState: published\nNotes: Release notes\nAssets:\n- #1 fj_darwin_arm64.tar.gz (1024 bytes)\n"
+	if output.String() != want {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+}
+
+func TestReleaseInspectOutputWithoutAssets(t *testing.T) {
+	inspector := &releaseInspectorStub{detail: applicationrelease.ReleaseDetail{TagName: "v0.1.0", Title: "Draft", Draft: true}}
+	command := newReleaseInspectCommand(inspector)
+	command.SetArgs([]string{"alice/project", "v0.1.0"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	want := "Release: v0.1.0\nTitle: Draft\nState: draft\nNotes: -\nAssets: none\n"
+	if output.String() != want {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+}
+
+func TestReleaseInspectRejectsInvalidInput(t *testing.T) {
+	tests := [][]string{
+		{},
+		{"alice/project"},
+		{"invalid", "v1.0.0"},
+		{"alice/project", "  "},
+	}
+	for _, args := range tests {
+		command := newReleaseInspectCommand(&releaseInspectorStub{})
+		command.SetArgs(args)
+		if err := command.Execute(); err == nil {
+			t.Fatalf("expected validation error for %v", args)
+		}
+	}
+}

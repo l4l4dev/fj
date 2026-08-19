@@ -20,3 +20,29 @@ type ListRequest struct {
 type Lister interface {
 	List(context.Context, ListRequest) ([]Release, error)
 }
+
+type Asset struct {
+	ID   int64
+	Name string
+	Size int64
+}
+
+type ReleaseDetail struct {
+	ID         int64
+	TagName    string
+	Title      string
+	Draft      bool
+	Prerelease bool
+	Notes      string
+	Assets     []Asset
+}
+
+type InspectRequest struct {
+	Owner string
+	Name  string
+	Tag   string
+}
+
+type Inspector interface {
+	Inspect(context.Context, InspectRequest) (ReleaseDetail, error)
+}
