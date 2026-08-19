@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	applicationrelease "github.com/l4l4dev/fj/internal/application/release"
@@ -9,11 +11,13 @@ import (
 )
 
 type releaseDependencies struct {
-	lister    applicationrelease.Lister
-	inspector applicationrelease.Inspector
-	creator   applicationrelease.Creator
-	updater   applicationrelease.Updater
-	publisher applicationrelease.Publisher
+	lister        applicationrelease.Lister
+	inspector     applicationrelease.Inspector
+	creator       applicationrelease.Creator
+	updater       applicationrelease.Updater
+	publisher     applicationrelease.Publisher
+	assetUploader applicationrelease.AssetUploader
+	assetDeleter  applicationrelease.AssetDeleter
 }
 
 func newReleaseCommand(dependencies releaseDependencies) *cobra.Command {
@@ -23,6 +27,136 @@ func newReleaseCommand(dependencies releaseDependencies) *cobra.Command {
 	command.AddCommand(newReleaseCreateCommand(dependencies.creator))
 	command.AddCommand(newReleaseUpdateCommand(dependencies.updater))
 	command.AddCommand(newReleasePublishCommand(dependencies.inspector, dependencies.publisher))
+	command.AddCommand(newReleaseAssetCommand(dependencies.inspector, dependencies.assetUploader, dependencies.assetDeleter))
+	return command
+}
+
+func newReleaseAssetCommand(inspector applicationrelease.Inspector, uploader applicationrelease.AssetUploader, deleter applicationrelease.AssetDeleter) *cobra.Command {
+	command := &cobra.Command{Use: "asset", Short: "Manage release assets"}
+	command.AddCommand(newReleaseAssetListCommand(inspector))
+	command.AddCommand(newReleaseAssetUploadCommand(uploader))
+	command.AddCommand(newReleaseAssetDeleteCommand(deleter))
+	return command
+}
+
+func newReleaseAssetListCommand(inspector applicationrelease.Inspector) *cobra.Command {
+	var instance string
+	command := &cobra.Command{Use: "list OWNER/NAME TAG", Short: "List release assets", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 2 {
+			return newCommandError(categoryValidation, "list release assets", fmt.Errorf("OWNER/NAME and release tag are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "list release assets", err)
+		}
+		if strings.TrimSpace(args[1]) == "" {
+			return newCommandError(categoryValidation, "list release assets", fmt.Errorf("release tag is required"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if inspector == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			inspector = dependencies.ReleaseInspector
+			if inspector == nil {
+				return newCommandError(categoryInternal, "list release assets", fmt.Errorf("release inspector unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		result, err := applicationrelease.NewInspectUseCase(inspector).Execute(command.Context(), applicationrelease.InspectRequest{Owner: parts[0], Name: parts[1], Tag: args[1]})
+		if err != nil {
+			return mapApplicationError(err, "list release assets")
+		}
+		return (releasePresenter{}).PresentAssets(command.OutOrStdout(), result)
+	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
+	return command
+}
+
+func newReleaseAssetUploadCommand(uploader applicationrelease.AssetUploader) *cobra.Command {
+	var instance, name string
+	command := &cobra.Command{Use: "upload OWNER/NAME TAG FILE", Short: "Upload a release asset", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 3 {
+			return newCommandError(categoryValidation, "upload release asset", fmt.Errorf("OWNER/NAME, release tag, and asset file are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "upload release asset", err)
+		}
+		if strings.TrimSpace(args[1]) == "" {
+			return newCommandError(categoryValidation, "upload release asset", fmt.Errorf("release tag is required"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		content, err := os.ReadFile(args[2])
+		if err != nil {
+			return newCommandError(categoryValidation, "upload release asset", err)
+		}
+		assetName := name
+		if strings.TrimSpace(assetName) == "" {
+			assetName = filepath.Base(args[2])
+		}
+		if uploader == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			uploader = dependencies.ReleaseAssetUploader
+			if uploader == nil {
+				return newCommandError(categoryInternal, "upload release asset", fmt.Errorf("release asset uploader unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		result, err := applicationrelease.NewUploadAssetUseCase(uploader).Execute(command.Context(), applicationrelease.UploadAssetRequest{Owner: parts[0], Name: parts[1], Tag: args[1], AssetName: assetName, Content: content})
+		if err != nil {
+			return mapApplicationError(err, "upload release asset")
+		}
+		return (releasePresenter{}).PresentAssetUploaded(command.OutOrStdout(), result, args[1])
+	}}
+	command.Flags().StringVar(&name, "name", "", "asset name (defaults to the file name)")
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
+	return command
+}
+
+func newReleaseAssetDeleteCommand(deleter applicationrelease.AssetDeleter) *cobra.Command {
+	var instance string
+	var confirm bool
+	command := &cobra.Command{Use: "delete OWNER/NAME TAG ASSET_NAME", Short: "Delete a release asset", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 3 {
+			return newCommandError(categoryValidation, "delete release asset", fmt.Errorf("OWNER/NAME, release tag, and asset name are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "delete release asset", err)
+		}
+		if strings.TrimSpace(args[1]) == "" {
+			return newCommandError(categoryValidation, "delete release asset", fmt.Errorf("release tag is required"))
+		}
+		if strings.TrimSpace(args[2]) == "" {
+			return newCommandError(categoryValidation, "delete release asset", fmt.Errorf("asset name is required"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if !confirm {
+			return newCommandError(categoryValidation, "delete release asset", fmt.Errorf("deleting an asset requires --confirm"))
+		}
+		if deleter == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			deleter = dependencies.ReleaseAssetDeleter
+			if deleter == nil {
+				return newCommandError(categoryInternal, "delete release asset", fmt.Errorf("release asset deleter unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		if err := applicationrelease.NewDeleteAssetUseCase(deleter).Execute(command.Context(), applicationrelease.DeleteAssetRequest{Owner: parts[0], Name: parts[1], Tag: args[1], AssetName: args[2]}); err != nil {
+			return mapApplicationError(err, "delete release asset")
+		}
+		return (releasePresenter{}).PresentAssetDeleted(command.OutOrStdout(), args[1], args[2])
+	}}
+	command.Flags().BoolVar(&confirm, "confirm", false, "confirm deleting the asset")
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 

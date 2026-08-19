@@ -47,6 +47,50 @@ func TestClientBuildsAuthenticatedRequest(t *testing.T) {
 	}
 }
 
+func TestClientDoRawUsesSuppliedContentType(t *testing.T) {
+	var received *http.Request
+	client := NewClient(config.Instance{Endpoint: "https://forgejo.example"}, applicationauth.NewCredential("token"), "0.1.0", doerFunc(func(request *http.Request) (*http.Response, error) {
+		received = request
+		return &http.Response{StatusCode: http.StatusCreated, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+	}))
+
+	response, err := client.DoRaw(context.Background(), http.MethodPost, "/api/v1/repos/alice/project/releases/7/assets", url.Values{"name": {"asset.txt"}}, []byte("payload"), "multipart/form-data; boundary=abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if received.Header.Get("Content-Type") != "multipart/form-data; boundary=abc" {
+		t.Errorf("content-type = %q", received.Header.Get("Content-Type"))
+	}
+	body, err := io.ReadAll(received.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "payload" {
+		t.Errorf("body = %q", body)
+	}
+	if received.URL.RawQuery != "name=asset.txt" {
+		t.Errorf("query = %q", received.URL.RawQuery)
+	}
+}
+
+func TestClientDoJSONSetsJSONContentType(t *testing.T) {
+	var received *http.Request
+	client := NewClient(config.Instance{Endpoint: "https://forgejo.example"}, applicationauth.NewCredential("token"), "0.1.0", doerFunc(func(request *http.Request) (*http.Response, error) {
+		received = request
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+	}))
+
+	response, err := client.DoJSON(context.Background(), http.MethodPatch, "/api/v1/repos/alice/project/releases/7", nil, []byte(`{"draft":false}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if received.Header.Get("Content-Type") != "application/json" {
+		t.Errorf("content-type = %q", received.Header.Get("Content-Type"))
+	}
+}
+
 func TestClientReturnsSafeRemoteErrors(t *testing.T) {
 	const secret = "secret-token"
 	tests := []struct {

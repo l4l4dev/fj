@@ -39,14 +39,18 @@ func NewClient(instance config.Instance, credential applicationauth.Credential, 
 }
 
 func (forgejoClient client) Do(ctx context.Context, method, apiPath string, query url.Values) (*http.Response, error) {
-	return forgejoClient.do(ctx, method, apiPath, query, nil)
+	return forgejoClient.do(ctx, method, apiPath, query, nil, "")
 }
 
 func (forgejoClient client) DoJSON(ctx context.Context, method, apiPath string, query url.Values, body []byte) (*http.Response, error) {
-	return forgejoClient.do(ctx, method, apiPath, query, body)
+	return forgejoClient.do(ctx, method, apiPath, query, body, "application/json")
 }
 
-func (forgejoClient client) do(ctx context.Context, method, apiPath string, query url.Values, body []byte) (*http.Response, error) {
+func (forgejoClient client) DoRaw(ctx context.Context, method, apiPath string, query url.Values, body []byte, contentType string) (*http.Response, error) {
+	return forgejoClient.do(ctx, method, apiPath, query, body, contentType)
+}
+
+func (forgejoClient client) do(ctx context.Context, method, apiPath string, query url.Values, body []byte, contentType string) (*http.Response, error) {
 	target, err := url.JoinPath(forgejoClient.endpoint, apiPath)
 	if err != nil {
 		return nil, newRemoteError("build request", 0)
@@ -63,8 +67,8 @@ func (forgejoClient client) do(ctx context.Context, method, apiPath string, quer
 	}
 	request.Header.Set("Authorization", "token "+forgejoClient.credential.Value())
 	request.Header.Set("User-Agent", "fj/"+forgejoClient.version)
-	if body != nil {
-		request.Header.Set("Content-Type", "application/json")
+	if body != nil && contentType != "" {
+		request.Header.Set("Content-Type", contentType)
 	}
 
 	response, err := forgejoClient.httpClient.Do(request)

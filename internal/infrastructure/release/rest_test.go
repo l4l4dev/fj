@@ -1,9 +1,11 @@
 package release
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -336,6 +338,179 @@ func TestRESTAdapterPublishMapsHTTPError(t *testing.T) {
 
 func TestRESTAdapterPublishMapsNotFoundSafely(t *testing.T) {
 	_, err := NewRESTAdapter(&jsonStubTransport{err: statusError(http.StatusNotFound)}).Publish(context.Background(), applicationrelease.PublishRequest{Owner: "alice", Name: "project", ID: 7})
+	var appErr apperror.Error
+	if !errors.As(err, &appErr) || appErr.Category != apperror.NotFound || appErr.Message != "release not found" {
+		t.Fatalf("error = %#v, want safe not-found application error", err)
+	}
+}
+
+type assetStubTransport struct {
+	getPath     string
+	getBody     string
+	getErr      error
+	doMethod    string
+	doPath      string
+	doCalls     int
+	doErr       error
+	rawMethod   string
+	rawPath     string
+	rawQuery    url.Values
+	rawBody     []byte
+	rawType     string
+	rawErr      error
+	rawResponse string
+}
+
+func (stub *assetStubTransport) Do(_ context.Context, method, path string, _ url.Values) (*http.Response, error) {
+	if method == http.MethodGet {
+		stub.getPath = path
+		if stub.getErr != nil {
+			return nil, stub.getErr
+		}
+		body := stub.getBody
+		if body == "" {
+			body = `{"id":7,"tag_name":"v1.0.0","assets":[{"id":11,"name":"fj.tar.gz","size":7}]}`
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}, nil
+	}
+	stub.doMethod, stub.doPath, stub.doCalls = method, path, stub.doCalls+1
+	if stub.doErr != nil {
+		return nil, stub.doErr
+	}
+	return &http.Response{StatusCode: http.StatusNoContent, Body: io.NopCloser(strings.NewReader(""))}, nil
+}
+
+func (stub *assetStubTransport) DoRaw(_ context.Context, method, path string, query url.Values, body []byte, contentType string) (*http.Response, error) {
+	stub.rawMethod, stub.rawPath, stub.rawQuery, stub.rawBody, stub.rawType = method, path, query, body, contentType
+	if stub.rawErr != nil {
+		return nil, stub.rawErr
+	}
+	response := stub.rawResponse
+	if response == "" {
+		response = `{"id":11,"name":"fj.tar.gz","size":7}`
+	}
+	return &http.Response{StatusCode: http.StatusCreated, Body: io.NopCloser(strings.NewReader(response))}, nil
+}
+
+func TestRESTAdapterUploadAssetPostsMultipartToResolvedRelease(t *testing.T) {
+	transport := &assetStubTransport{}
+	result, err := NewRESTAdapter(transport).UploadAsset(context.Background(), applicationrelease.UploadAssetRequest{Owner: "alice", Name: "project", Tag: "v1.0.0", AssetName: "fj.tar.gz", Content: []byte("payload")})
+	if err != nil || result.ID != 11 || result.Name != "fj.tar.gz" || result.Size != 7 {
+		t.Fatalf("unexpected result: %+v err=%v", result, err)
+	}
+	if transport.getPath != "/api/v1/repos/alice/project/releases/tags/v1.0.0" {
+		t.Fatalf("unexpected resolve path: %s", transport.getPath)
+	}
+	if transport.rawMethod != http.MethodPost || transport.rawPath != "/api/v1/repos/alice/project/releases/7/assets" {
+		t.Fatalf("unexpected upload request: method=%s path=%s", transport.rawMethod, transport.rawPath)
+	}
+	if transport.rawQuery.Get("name") != "fj.tar.gz" {
+		t.Fatalf("unexpected query: %v", transport.rawQuery)
+	}
+	if !strings.HasPrefix(transport.rawType, "multipart/form-data; boundary=") {
+		t.Fatalf("unexpected content type: %s", transport.rawType)
+	}
+	boundary := strings.TrimPrefix(transport.rawType, "multipart/form-data; boundary=")
+	reader := multipart.NewReader(bytes.NewReader(transport.rawBody), boundary)
+	part, err := reader.NextPart()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if part.FormName() != "attachment" || part.FileName() != "fj.tar.gz" {
+		t.Fatalf("unexpected part: name=%s filename=%s", part.FormName(), part.FileName())
+	}
+	content, err := io.ReadAll(part)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) != "payload" {
+		t.Fatalf("unexpected part content: %q", content)
+	}
+}
+
+func TestRESTAdapterUploadAssetMapsResolveHTTPError(t *testing.T) {
+	transport := &assetStubTransport{getErr: statusError(http.StatusNotFound)}
+	_, err := NewRESTAdapter(transport).UploadAsset(context.Background(), applicationrelease.UploadAssetRequest{Owner: "alice", Name: "project", Tag: "v1.0.0", AssetName: "fj.tar.gz", Content: []byte("payload")})
+	var appErr apperror.Error
+	if !errors.As(err, &appErr) || appErr.Category != apperror.NotFound || appErr.Message != "release not found" {
+		t.Fatalf("error = %#v, want safe not-found application error", err)
+	}
+	if transport.rawMethod != "" {
+		t.Fatal("upload must not be attempted when the release cannot be resolved")
+	}
+}
+
+func TestRESTAdapterUploadAssetMapsUploadHTTPError(t *testing.T) {
+	tests := []struct {
+		status   int
+		category apperror.Category
+		message  string
+	}{
+		{http.StatusUnauthorized, apperror.Authentication, "permission denied or authentication failed"},
+		{http.StatusForbidden, apperror.Authentication, "permission denied or authentication failed"},
+		{http.StatusConflict, apperror.Conflict, "an asset with this name already exists"},
+		{http.StatusRequestEntityTooLarge, apperror.Validation, "asset was rejected by the remote service"},
+		{http.StatusUnprocessableEntity, apperror.Validation, "asset was rejected by the remote service"},
+		{http.StatusInternalServerError, apperror.Remote, ""},
+	}
+	for _, test := range tests {
+		transport := &assetStubTransport{rawErr: statusError(test.status)}
+		_, err := NewRESTAdapter(transport).UploadAsset(context.Background(), applicationrelease.UploadAssetRequest{Owner: "alice", Name: "project", Tag: "v1.0.0", AssetName: "fj.tar.gz", Content: []byte("payload")})
+		var appErr apperror.Error
+		if !errors.As(err, &appErr) || appErr.Category != test.category || appErr.Message != test.message {
+			t.Fatalf("status %d: unexpected error %#v", test.status, err)
+		}
+	}
+}
+
+func TestRESTAdapterDeleteAssetUsesResolvedAssetID(t *testing.T) {
+	transport := &assetStubTransport{}
+	if err := NewRESTAdapter(transport).DeleteAsset(context.Background(), applicationrelease.DeleteAssetRequest{Owner: "alice", Name: "project", Tag: "v1.0.0", AssetName: "fj.tar.gz"}); err != nil {
+		t.Fatal(err)
+	}
+	if transport.getPath != "/api/v1/repos/alice/project/releases/tags/v1.0.0" {
+		t.Fatalf("unexpected resolve path: %s", transport.getPath)
+	}
+	if transport.doMethod != http.MethodDelete || transport.doPath != "/api/v1/repos/alice/project/releases/7/assets/11" {
+		t.Fatalf("unexpected delete request: method=%s path=%s", transport.doMethod, transport.doPath)
+	}
+}
+
+func TestRESTAdapterDeleteAssetReportsMissingAsset(t *testing.T) {
+	transport := &assetStubTransport{getBody: `{"id":7,"tag_name":"v1.0.0","assets":[{"id":11,"name":"other.tar.gz","size":7}]}`}
+	err := NewRESTAdapter(transport).DeleteAsset(context.Background(), applicationrelease.DeleteAssetRequest{Owner: "alice", Name: "project", Tag: "v1.0.0", AssetName: "fj.tar.gz"})
+	var appErr apperror.Error
+	if !errors.As(err, &appErr) || appErr.Category != apperror.NotFound || appErr.Message != "asset not found" {
+		t.Fatalf("error = %#v, want asset not-found application error", err)
+	}
+	if transport.doCalls != 0 {
+		t.Fatal("delete must not be attempted when the asset is absent")
+	}
+}
+
+func TestRESTAdapterDeleteAssetMapsHTTPError(t *testing.T) {
+	tests := []struct {
+		status   int
+		category apperror.Category
+	}{
+		{http.StatusUnauthorized, apperror.Authentication},
+		{http.StatusForbidden, apperror.Authentication},
+		{http.StatusNotFound, apperror.NotFound},
+		{http.StatusInternalServerError, apperror.Remote},
+	}
+	for _, test := range tests {
+		transport := &assetStubTransport{doErr: statusError(test.status)}
+		err := NewRESTAdapter(transport).DeleteAsset(context.Background(), applicationrelease.DeleteAssetRequest{Owner: "alice", Name: "project", Tag: "v1.0.0", AssetName: "fj.tar.gz"})
+		var appErr apperror.Error
+		if !errors.As(err, &appErr) || appErr.Category != test.category {
+			t.Fatalf("status %d: unexpected error %#v", test.status, err)
+		}
+	}
+}
+
+func TestRESTAdapterDeleteAssetMapsResolveHTTPError(t *testing.T) {
+	transport := &assetStubTransport{getErr: statusError(http.StatusNotFound)}
+	err := NewRESTAdapter(transport).DeleteAsset(context.Background(), applicationrelease.DeleteAssetRequest{Owner: "alice", Name: "project", Tag: "v1.0.0", AssetName: "fj.tar.gz"})
 	var appErr apperror.Error
 	if !errors.As(err, &appErr) || appErr.Category != apperror.NotFound || appErr.Message != "release not found" {
 		t.Fatalf("error = %#v, want safe not-found application error", err)

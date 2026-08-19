@@ -81,3 +81,29 @@ func (releasePresenter) PresentPublished(w io.Writer, detail applicationrelease.
 	_, err := fmt.Fprintf(w, "Release published: %s\nTitle: %s\n", detail.TagName, detail.Title)
 	return err
 }
+
+func (releasePresenter) PresentAssets(w io.Writer, detail applicationrelease.ReleaseDetail) error {
+	if len(detail.Assets) == 0 {
+		_, err := fmt.Fprintf(w, "Assets for %s: none\n", detail.TagName)
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Assets for %s:\n", detail.TagName); err != nil {
+		return err
+	}
+	for _, asset := range detail.Assets {
+		if _, err := fmt.Fprintf(w, "- #%d %s (%d bytes)\n", asset.ID, asset.Name, asset.Size); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (releasePresenter) PresentAssetUploaded(w io.Writer, asset applicationrelease.Asset, tag string) error {
+	_, err := fmt.Fprintf(w, "Asset uploaded to %s: #%d %s (%d bytes)\n", tag, asset.ID, asset.Name, asset.Size)
+	return err
+}
+
+func (releasePresenter) PresentAssetDeleted(w io.Writer, tag, name string) error {
+	_, err := fmt.Fprintf(w, "Asset deleted from %s: %s\n", tag, name)
+	return err
+}

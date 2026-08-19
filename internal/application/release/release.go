@@ -82,3 +82,26 @@ type PublishRequest struct {
 type Publisher interface {
 	Publish(context.Context, PublishRequest) (ReleaseDetail, error)
 }
+
+type UploadAssetRequest struct {
+	Owner     string
+	Name      string
+	Tag       string
+	AssetName string
+	Content   []byte
+}
+
+type AssetUploader interface {
+	UploadAsset(context.Context, UploadAssetRequest) (Asset, error)
+}
+
+type DeleteAssetRequest struct {
+	Owner     string
+	Name      string
+	Tag       string
+	AssetName string
+}
+
+type AssetDeleter interface {
+	DeleteAsset(context.Context, DeleteAssetRequest) error
+}

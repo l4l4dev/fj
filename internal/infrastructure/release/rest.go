@@ -1,9 +1,11 @@
 package release
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -18,6 +20,10 @@ type transport interface {
 
 type jsonTransport interface {
 	DoJSON(context.Context, string, string, url.Values, []byte) (*http.Response, error)
+}
+
+type rawTransport interface {
+	DoRaw(context.Context, string, string, url.Values, []byte, string) (*http.Response, error)
 }
 
 type RESTAdapter struct{ transport transport }
@@ -193,6 +199,103 @@ func (a *RESTAdapter) Publish(ctx context.Context, request applicationrelease.Pu
 	return applicationrelease.ReleaseDetail{ID: decoded.ID, TagName: decoded.TagName, Title: decoded.Name, Draft: decoded.Draft, Prerelease: decoded.Prerelease, Notes: decoded.Body, Assets: assets}, nil
 }
 
+func (a *RESTAdapter) UploadAsset(ctx context.Context, request applicationrelease.UploadAssetRequest) (applicationrelease.Asset, error) {
+	rawClient, ok := a.transport.(rawTransport)
+	if !ok {
+		return applicationrelease.Asset{}, apperror.New(apperror.Remote, "upload release asset", "")
+	}
+	existing, err := a.resolveReleaseByTag(ctx, request.Owner, request.Name, request.Tag, "upload release asset")
+	if err != nil {
+		return applicationrelease.Asset{}, err
+	}
+	var buffer bytes.Buffer
+	writer := multipart.NewWriter(&buffer)
+	part, err := writer.CreateFormFile("attachment", request.AssetName)
+	if err != nil {
+		return applicationrelease.Asset{}, apperror.New(apperror.Remote, "upload release asset", "")
+	}
+	if _, err := part.Write(request.Content); err != nil {
+		return applicationrelease.Asset{}, apperror.New(apperror.Remote, "upload release asset", "")
+	}
+	if err := writer.Close(); err != nil {
+		return applicationrelease.Asset{}, apperror.New(apperror.Remote, "upload release asset", "")
+	}
+	query := url.Values{}
+	query.Set("name", request.AssetName)
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/releases/" + strconv.FormatInt(existing.ID, 10) + "/assets"
+	response, err := rawClient.DoRaw(ctx, http.MethodPost, path, query, buffer.Bytes(), writer.FormDataContentType())
+	if err != nil {
+		return applicationrelease.Asset{}, translateAssetError(err, "upload release asset")
+	}
+	defer response.Body.Close()
+	var decoded struct {
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
+		Size int64  `json:"size"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationrelease.Asset{}, apperror.New(apperror.Remote, "upload release asset", "")
+	}
+	return applicationrelease.Asset{ID: decoded.ID, Name: decoded.Name, Size: decoded.Size}, nil
+}
+
+func (a *RESTAdapter) DeleteAsset(ctx context.Context, request applicationrelease.DeleteAssetRequest) error {
+	existing, err := a.resolveReleaseByTag(ctx, request.Owner, request.Name, request.Tag, "delete release asset")
+	if err != nil {
+		return err
+	}
+	assetID := int64(0)
+	found := false
+	for _, asset := range existing.Assets {
+		if asset.Name == request.AssetName {
+			assetID, found = asset.ID, true
+			break
+		}
+	}
+	if !found {
+		return apperror.New(apperror.NotFound, "delete release asset", "asset not found")
+	}
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/releases/" + strconv.FormatInt(existing.ID, 10) + "/assets/" + strconv.FormatInt(assetID, 10)
+	response, err := a.transport.Do(ctx, http.MethodDelete, path, nil)
+	if err != nil {
+		return translateAssetError(err, "delete release asset")
+	}
+	response.Body.Close()
+	return nil
+}
+
+func (a *RESTAdapter) resolveReleaseByTag(ctx context.Context, owner, name, tag, operation string) (forgejoReleaseDetail, error) {
+	path := "/api/v1/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(name) + "/releases/tags/" + url.PathEscape(tag)
+	response, err := a.transport.Do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return forgejoReleaseDetail{}, translateAssetError(err, operation)
+	}
+	var decoded forgejoReleaseDetail
+	decodeErr := json.NewDecoder(response.Body).Decode(&decoded)
+	response.Body.Close()
+	if decodeErr != nil {
+		return forgejoReleaseDetail{}, apperror.New(apperror.Remote, operation, "")
+	}
+	return decoded, nil
+}
+
+func translateAssetError(err error, operation string) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		switch status.StatusCode() {
+		case 401, 403:
+			return apperror.New(apperror.Authentication, operation, "permission denied or authentication failed")
+		case 404:
+			return apperror.New(apperror.NotFound, operation, "release not found")
+		case 409:
+			return apperror.New(apperror.Conflict, operation, "an asset with this name already exists")
+		case 413, 422:
+			return apperror.New(apperror.Validation, operation, "asset was rejected by the remote service")
+		}
+	}
+	return apperror.New(apperror.Remote, operation, "")
+}
+
 func translatePublishError(err error) error {
 	var status interface{ StatusCode() int }
 	if errors.As(err, &status) {
@@ -271,3 +374,5 @@ var _ applicationrelease.Inspector = (*RESTAdapter)(nil)
 var _ applicationrelease.Creator = (*RESTAdapter)(nil)
 var _ applicationrelease.Updater = (*RESTAdapter)(nil)
 var _ applicationrelease.Publisher = (*RESTAdapter)(nil)
+var _ applicationrelease.AssetUploader = (*RESTAdapter)(nil)
+var _ applicationrelease.AssetDeleter = (*RESTAdapter)(nil)
