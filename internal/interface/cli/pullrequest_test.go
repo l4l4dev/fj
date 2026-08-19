@@ -189,3 +189,82 @@ func TestPullRequestUpdateRejectsInvalidInput(t *testing.T) {
 		}
 	}
 }
+
+type pullRequestCommentViewerStub struct {
+	request  applicationpullrequest.ListCommentsRequest
+	comments []applicationpullrequest.Comment
+}
+
+func (stub *pullRequestCommentViewerStub) ListComments(_ context.Context, request applicationpullrequest.ListCommentsRequest) ([]applicationpullrequest.Comment, error) {
+	stub.request = request
+	return stub.comments, nil
+}
+
+type pullRequestCommentCreatorStub struct {
+	request applicationpullrequest.AddCommentRequest
+}
+
+func (stub *pullRequestCommentCreatorStub) AddComment(_ context.Context, request applicationpullrequest.AddCommentRequest) (applicationpullrequest.Comment, error) {
+	stub.request = request
+	return applicationpullrequest.Comment{ID: 9, Body: request.Body}, nil
+}
+
+func TestPullRequestCommentListOutput(t *testing.T) {
+	viewer := &pullRequestCommentViewerStub{comments: []applicationpullrequest.Comment{{ID: 5, Body: "First"}}}
+	command := newPullRequestCommentListCommand(viewer)
+	command.SetArgs([]string{"alice/project", "12"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if viewer.request.Number != 12 {
+		t.Fatalf("unexpected request: %+v", viewer.request)
+	}
+	if output.String() != "Comments:\n- #5 First\n" {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+}
+
+func TestPullRequestCommentAddOutputAndRequest(t *testing.T) {
+	creator := &pullRequestCommentCreatorStub{}
+	command := newPullRequestCommentAddCommand(creator)
+	command.SetArgs([]string{"alice/project", "12", "--body", "Looks good"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if creator.request.Number != 12 || creator.request.Body != "Looks good" {
+		t.Fatalf("unexpected request: %+v", creator.request)
+	}
+	if output.String() != "Comment:\n#9 Looks good\n" {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+}
+
+func TestPullRequestCommentRejectsInvalidInput(t *testing.T) {
+	listTests := [][]string{
+		{"alice/project"},
+		{"invalid", "12"},
+		{"alice/project", "0"},
+	}
+	for _, args := range listTests {
+		command := newPullRequestCommentListCommand(&pullRequestCommentViewerStub{})
+		command.SetArgs(args)
+		if err := command.Execute(); err == nil {
+			t.Fatalf("expected validation error for list %v", args)
+		}
+	}
+	addTests := [][]string{
+		{"alice/project", "12"},
+		{"alice/project", "12", "--body", "  "},
+	}
+	for _, args := range addTests {
+		command := newPullRequestCommentAddCommand(&pullRequestCommentCreatorStub{})
+		command.SetArgs(args)
+		if err := command.Execute(); err == nil {
+			t.Fatalf("expected validation error for add %v", args)
+		}
+	}
+}

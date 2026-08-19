@@ -206,3 +206,89 @@ func TestRESTAdapterUpdateMapsHTTPError(t *testing.T) {
 		}
 	}
 }
+
+type commentStubTransport struct {
+	paths      []string
+	verifyErr  error
+	listBody   string
+	jsonMethod string
+	jsonPath   string
+	jsonBody   []byte
+	jsonErr    error
+}
+
+func (stub *commentStubTransport) Do(_ context.Context, _ string, path string, _ url.Values) (*http.Response, error) {
+	stub.paths = append(stub.paths, path)
+	if strings.Contains(path, "/pulls/") {
+		if stub.verifyErr != nil {
+			return nil, stub.verifyErr
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"number":12}`))}, nil
+	}
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(stub.listBody))}, nil
+}
+
+func (stub *commentStubTransport) DoJSON(_ context.Context, method, path string, _ url.Values, body []byte) (*http.Response, error) {
+	stub.jsonMethod, stub.jsonPath, stub.jsonBody = method, path, body
+	if stub.jsonErr != nil {
+		return nil, stub.jsonErr
+	}
+	return &http.Response{StatusCode: http.StatusCreated, Body: io.NopCloser(strings.NewReader(`{"id":9,"body":"Looks good"}`))}, nil
+}
+
+func TestRESTAdapterListCommentsVerifiesPullRequest(t *testing.T) {
+	stub := &commentStubTransport{listBody: `[{"id":5,"body":"First"}]`}
+	comments, err := NewRESTAdapter(stub).ListComments(context.Background(), applicationpullrequest.ListCommentsRequest{Owner: "alice", Name: "project", Number: 12})
+	if err != nil || len(comments) != 1 || comments[0].ID != 5 || comments[0].Body != "First" {
+		t.Fatalf("unexpected result: %+v err=%v", comments, err)
+	}
+	if len(stub.paths) != 2 || stub.paths[0] != "/api/v1/repos/alice/project/pulls/12" || stub.paths[1] != "/api/v1/repos/alice/project/issues/12/comments" {
+		t.Fatalf("unexpected request paths: %v", stub.paths)
+	}
+}
+
+func TestRESTAdapterListCommentsRejectsMissingPullRequest(t *testing.T) {
+	stub := &commentStubTransport{verifyErr: statusError(404)}
+	_, err := NewRESTAdapter(stub).ListComments(context.Background(), applicationpullrequest.ListCommentsRequest{Owner: "alice", Name: "project", Number: 12})
+	var appErr apperror.Error
+	if !errors.As(err, &appErr) || appErr.Category != apperror.NotFound || appErr.Message != "pull request not found" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(stub.paths) != 1 {
+		t.Fatalf("comment endpoint must not be called when the pull request is missing: %v", stub.paths)
+	}
+}
+
+func TestRESTAdapterAddCommentVerifiesAndPosts(t *testing.T) {
+	stub := &commentStubTransport{}
+	comment, err := NewRESTAdapter(stub).AddComment(context.Background(), applicationpullrequest.AddCommentRequest{Owner: "alice", Name: "project", Number: 12, Body: "Looks good"})
+	if err != nil || comment.ID != 9 {
+		t.Fatalf("unexpected result: %+v err=%v", comment, err)
+	}
+	if len(stub.paths) != 1 || stub.paths[0] != "/api/v1/repos/alice/project/pulls/12" {
+		t.Fatalf("unexpected verification path: %v", stub.paths)
+	}
+	if stub.jsonMethod != http.MethodPost || stub.jsonPath != "/api/v1/repos/alice/project/issues/12/comments" || string(stub.jsonBody) != `{"body":"Looks good"}` {
+		t.Fatalf("unexpected request: %s %s %s", stub.jsonMethod, stub.jsonPath, stub.jsonBody)
+	}
+}
+
+func TestRESTAdapterAddCommentMapsHTTPError(t *testing.T) {
+	tests := []struct {
+		status   int
+		category apperror.Category
+	}{
+		{401, apperror.Authentication},
+		{403, apperror.Authentication},
+		{422, apperror.Validation},
+		{500, apperror.Remote},
+	}
+	for _, test := range tests {
+		stub := &commentStubTransport{jsonErr: statusError(test.status)}
+		_, err := NewRESTAdapter(stub).AddComment(context.Background(), applicationpullrequest.AddCommentRequest{Owner: "alice", Name: "project", Number: 12, Body: "Hi"})
+		var appErr apperror.Error
+		if !errors.As(err, &appErr) || appErr.Category != test.category {
+			t.Fatalf("status %d: unexpected error %v", test.status, err)
+		}
+	}
+}

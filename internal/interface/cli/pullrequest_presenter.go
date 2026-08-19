@@ -20,6 +20,27 @@ func (pullRequestPresenter) PresentUpdated(w io.Writer, detail applicationpullre
 	return err
 }
 
+func (pullRequestPresenter) PresentComments(w io.Writer, comments []applicationpullrequest.Comment) error {
+	if _, err := fmt.Fprintln(w, "Comments:"); err != nil {
+		return err
+	}
+	if len(comments) == 0 {
+		_, err := fmt.Fprintln(w, "No comments found.")
+		return err
+	}
+	for _, comment := range comments {
+		if _, err := fmt.Fprintf(w, "- #%d %s\n", comment.ID, comment.Body); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (pullRequestPresenter) PresentComment(w io.Writer, comment applicationpullrequest.Comment) error {
+	_, err := fmt.Fprintf(w, "Comment:\n#%d %s\n", comment.ID, comment.Body)
+	return err
+}
+
 func (pullRequestPresenter) PresentStatus(w io.Writer, status applicationpullrequest.PullRequestStatus) error {
 	_, err := fmt.Fprintf(w, "Pull request: #%d\nReview: %s\nChecks: %s\nMergeable: %s\n", status.Number, status.Review, status.Check, status.Mergeable)
 	return err

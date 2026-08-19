@@ -125,6 +125,32 @@ type StatusViewer interface {
 	ViewStatus(context.Context, StatusRequest) (StatusData, error)
 }
 
+type Comment struct {
+	ID   int64
+	Body string
+}
+
+type ListCommentsRequest struct {
+	Owner  string
+	Name   string
+	Number int
+}
+
+type AddCommentRequest struct {
+	Owner  string
+	Name   string
+	Number int
+	Body   string
+}
+
+type CommentViewer interface {
+	ListComments(context.Context, ListCommentsRequest) ([]Comment, error)
+}
+
+type CommentCreator interface {
+	AddComment(context.Context, AddCommentRequest) (Comment, error)
+}
+
 type ReviewOutcome string
 
 const (

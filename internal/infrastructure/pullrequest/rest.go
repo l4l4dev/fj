@@ -218,6 +218,71 @@ func (a *RESTAdapter) Create(ctx context.Context, request applicationpullrequest
 	return applicationpullrequest.PullRequestDetail{Number: decoded.Number, Title: decoded.Title, State: applicationpullrequest.State(decoded.State), HeadBranch: decoded.Head.Ref, BaseBranch: decoded.Base.Ref}, nil
 }
 
+type forgejoComment struct {
+	ID   int64  `json:"id"`
+	Body string `json:"body"`
+}
+
+// The comments endpoint is shared with issues, so confirm the number refers
+// to a pull request before reading or writing comments.
+func (a *RESTAdapter) verifyPullRequest(ctx context.Context, owner, name string, number int, operation string) error {
+	path := "/api/v1/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(name) + "/pulls/" + strconv.Itoa(number)
+	response, err := a.transport.Do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return translateCommentError(err, operation)
+	}
+	response.Body.Close()
+	return nil
+}
+
+func (a *RESTAdapter) ListComments(ctx context.Context, request applicationpullrequest.ListCommentsRequest) ([]applicationpullrequest.Comment, error) {
+	if err := a.verifyPullRequest(ctx, request.Owner, request.Name, request.Number, "list pull request comments"); err != nil {
+		return nil, err
+	}
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues/" + strconv.Itoa(request.Number) + "/comments"
+	response, err := a.transport.Do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, translateCommentError(err, "list pull request comments")
+	}
+	defer response.Body.Close()
+	var decoded []forgejoComment
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return nil, apperror.New(apperror.Remote, "list pull request comments", "")
+	}
+	result := make([]applicationpullrequest.Comment, 0, len(decoded))
+	for _, comment := range decoded {
+		result = append(result, applicationpullrequest.Comment{ID: comment.ID, Body: comment.Body})
+	}
+	return result, nil
+}
+
+func (a *RESTAdapter) AddComment(ctx context.Context, request applicationpullrequest.AddCommentRequest) (applicationpullrequest.Comment, error) {
+	jsonClient, ok := a.transport.(jsonTransport)
+	if !ok {
+		return applicationpullrequest.Comment{}, apperror.New(apperror.Remote, "add pull request comment", "")
+	}
+	if err := a.verifyPullRequest(ctx, request.Owner, request.Name, request.Number, "add pull request comment"); err != nil {
+		return applicationpullrequest.Comment{}, err
+	}
+	body, err := json.Marshal(struct {
+		Body string `json:"body"`
+	}{Body: request.Body})
+	if err != nil {
+		return applicationpullrequest.Comment{}, apperror.New(apperror.Remote, "add pull request comment", "")
+	}
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/issues/" + strconv.Itoa(request.Number) + "/comments"
+	response, err := jsonClient.DoJSON(ctx, http.MethodPost, path, nil, body)
+	if err != nil {
+		return applicationpullrequest.Comment{}, translateCommentError(err, "add pull request comment")
+	}
+	defer response.Body.Close()
+	var decoded forgejoComment
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationpullrequest.Comment{}, apperror.New(apperror.Remote, "add pull request comment", "")
+	}
+	return applicationpullrequest.Comment{ID: decoded.ID, Body: decoded.Body}, nil
+}
+
 func (a *RESTAdapter) Update(ctx context.Context, request applicationpullrequest.UpdateRequest) (applicationpullrequest.PullRequestDetail, error) {
 	jsonClient, ok := a.transport.(jsonTransport)
 	if !ok {
@@ -329,6 +394,21 @@ func translateCreateError(err error) error {
 	return apperror.New(apperror.Remote, "create pull request", "")
 }
 
+func translateCommentError(err error, operation string) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		switch status.StatusCode() {
+		case 401, 403:
+			return apperror.New(apperror.Authentication, operation, "permission denied or authentication failed")
+		case 404:
+			return apperror.New(apperror.NotFound, operation, "pull request not found")
+		case 422:
+			return apperror.New(apperror.Validation, operation, "comment was rejected by the remote service")
+		}
+	}
+	return apperror.New(apperror.Remote, operation, "")
+}
+
 func translateUpdateError(err error) error {
 	var status interface{ StatusCode() int }
 	if errors.As(err, &status) {
@@ -378,5 +458,7 @@ var _ applicationpullrequest.PullRequestLister = (*RESTAdapter)(nil)
 var _ applicationpullrequest.PullRequestInspector = (*RESTAdapter)(nil)
 var _ applicationpullrequest.PullRequestCreator = (*RESTAdapter)(nil)
 var _ applicationpullrequest.Updater = (*RESTAdapter)(nil)
+var _ applicationpullrequest.CommentViewer = (*RESTAdapter)(nil)
+var _ applicationpullrequest.CommentCreator = (*RESTAdapter)(nil)
 var _ applicationpullrequest.StatusViewer = (*RESTAdapter)(nil)
 var _ applicationpullrequest.ReviewSubmitter = (*RESTAdapter)(nil)

@@ -16,6 +16,8 @@ type pullRequestDependencies struct {
 	updater         applicationpullrequest.Updater
 	statusViewer    applicationpullrequest.StatusViewer
 	reviewSubmitter applicationpullrequest.ReviewSubmitter
+	commentViewer   applicationpullrequest.CommentViewer
+	commentCreator  applicationpullrequest.CommentCreator
 }
 
 func newPullRequestCommand(dependencies pullRequestDependencies) *cobra.Command {
@@ -26,7 +28,90 @@ func newPullRequestCommand(dependencies pullRequestDependencies) *cobra.Command 
 	command.AddCommand(newPullRequestUpdateCommand(dependencies.updater))
 	command.AddCommand(newPullRequestStatusCommand(dependencies.statusViewer))
 	command.AddCommand(newPullRequestReviewCommand(dependencies.reviewSubmitter))
+	command.AddCommand(newPullRequestCommentCommand(dependencies.commentViewer, dependencies.commentCreator))
 	return command
+}
+
+func newPullRequestCommentCommand(viewer applicationpullrequest.CommentViewer, creator applicationpullrequest.CommentCreator) *cobra.Command {
+	command := &cobra.Command{Use: "comment", Short: "Manage pull request comments"}
+	command.AddCommand(newPullRequestCommentListCommand(viewer))
+	command.AddCommand(newPullRequestCommentAddCommand(creator))
+	return command
+}
+
+func newPullRequestCommentListCommand(viewer applicationpullrequest.CommentViewer) *cobra.Command {
+	var instance string
+	command := &cobra.Command{Use: "list OWNER/NAME NUMBER", Short: "List pull request comments", Args: func(_ *cobra.Command, args []string) error {
+		return validatePullRequestTargetArgs(args, "list pull request comments")
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if viewer == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			viewer = dependencies.PullRequestCommentViewer
+			if viewer == nil {
+				return newCommandError(categoryInternal, "list pull request comments", fmt.Errorf("pull request comment viewer unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		comments, err := applicationpullrequest.NewListCommentsUseCase(viewer).Execute(command.Context(), applicationpullrequest.ListCommentsRequest{Owner: parts[0], Name: parts[1], Number: number})
+		if err != nil {
+			return mapApplicationError(err, "list pull request comments")
+		}
+		return (pullRequestPresenter{}).PresentComments(command.OutOrStdout(), comments)
+	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
+	return command
+}
+
+func newPullRequestCommentAddCommand(creator applicationpullrequest.CommentCreator) *cobra.Command {
+	var instance, body string
+	command := &cobra.Command{Use: "add OWNER/NAME NUMBER", Short: "Add a pull request comment", Args: func(_ *cobra.Command, args []string) error {
+		if err := validatePullRequestTargetArgs(args, "add pull request comment"); err != nil {
+			return err
+		}
+		if strings.TrimSpace(body) == "" {
+			return newCommandError(categoryValidation, "add pull request comment", fmt.Errorf("comment body is required"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if creator == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			creator = dependencies.PullRequestCommentCreator
+			if creator == nil {
+				return newCommandError(categoryInternal, "add pull request comment", fmt.Errorf("pull request comment creator unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		comment, err := applicationpullrequest.NewAddCommentUseCase(creator).Execute(command.Context(), applicationpullrequest.AddCommentRequest{Owner: parts[0], Name: parts[1], Number: number, Body: body})
+		if err != nil {
+			return mapApplicationError(err, "add pull request comment")
+		}
+		return (pullRequestPresenter{}).PresentComment(command.OutOrStdout(), comment)
+	}}
+	command.Flags().StringVar(&body, "body", "", "comment body")
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
+	return command
+}
+
+func validatePullRequestTargetArgs(args []string, operation string) error {
+	if len(args) != 2 {
+		return newCommandError(categoryValidation, operation, fmt.Errorf("OWNER/NAME and pull request number are required"))
+	}
+	if err := validateRepositoryTarget(args[0]); err != nil {
+		return newCommandError(categoryValidation, operation, err)
+	}
+	number, err := strconv.Atoi(args[1])
+	if err != nil || number < 1 {
+		return newCommandError(categoryValidation, operation, fmt.Errorf("pull request number must be a positive integer"))
+	}
+	return nil
 }
 
 func newPullRequestUpdateCommand(updater applicationpullrequest.Updater) *cobra.Command {
