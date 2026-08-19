@@ -16,6 +16,8 @@ target-specific `go list -deps` output and `go version -m`.
 | `github.com/BurntSushi/toml` | `v1.6.0` | Direct / production / linked | MIT | Copyright (c) 2013 TOML authors | None found | [`BurntSushi-toml-COPYING`](licenses/BurntSushi-toml-COPYING) |
 | `github.com/spf13/cobra` | `v1.10.2` | Direct / production / linked | Apache License 2.0 | Copyright 2013-2023 The Cobra Authors | None found | [`spf13-cobra-LICENSE.txt`](licenses/spf13-cobra-LICENSE.txt) |
 | `github.com/spf13/pflag` | `v1.0.9` | Indirect / production / linked | BSD 3-Clause | Copyright (c) 2012 Alex Ogier; Copyright (c) 2012 The Go Authors | None found | [`spf13-pflag-LICENSE`](licenses/spf13-pflag-LICENSE) |
+| `golang.org/x/term` | `v0.45.0` | Direct / production / linked | BSD 3-Clause | Copyright 2009 The Go Authors | None found | [`golang.org-x-term-LICENSE`](licenses/golang.org-x-term-LICENSE) |
+| `golang.org/x/sys` | `v0.47.0` | Indirect / production / linked | BSD 3-Clause | Copyright 2009 The Go Authors | None found | [`golang.org-x-sys-LICENSE`](licenses/golang.org-x-sys-LICENSE) |
 
 `github.com/BurntSushi/toml` includes `type_fields.go`, which states that its
 struct-field handling is adapted from Go's `encoding/json` package and is
@@ -65,6 +67,9 @@ its Apache License 2.0 text.
 - The pflag BSD 3-Clause license requires its copyright notice, conditions,
   and disclaimer to accompany binary redistribution and prohibits using named
   contributors to endorse derived products without permission.
+- The `golang.org/x/term` and `golang.org/x/sys` BSD 3-Clause licenses carry the
+  same notice, condition, disclaimer, and endorsement requirements as pflag.
+  Both are governed by the Go Authors' BSD-style license.
 - Static linking into a Go executable does not remove these redistribution
   conditions.
 

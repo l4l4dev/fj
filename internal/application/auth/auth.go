@@ -11,23 +11,31 @@ import (
 var ErrCredentialUnavailable = errors.New("credential unavailable")
 
 type Provider interface {
-	Credential(context.Context, config.CredentialReference) (Credential, error)
+	Credential(context.Context, config.Instance) (Credential, error)
 }
 
 type Resolver struct {
-	provider Provider
+	providers []Provider
 }
 
-func NewResolver(provider Provider) Resolver {
-	return Resolver{provider: provider}
+func NewResolver(providers ...Provider) Resolver {
+	return Resolver{providers: providers}
 }
 
-func (resolver Resolver) Resolve(ctx context.Context, reference config.CredentialReference) (Credential, error) {
-	credential, err := resolver.provider.Credential(ctx, reference)
-	if err != nil {
-		return Credential{}, fmt.Errorf("resolve credential: %w", ErrCredentialUnavailable)
+// Resolve asks each provider in order and returns the first credential found.
+// A provider reporting ErrCredentialUnavailable is skipped; any other failure
+// aborts resolution.
+func (resolver Resolver) Resolve(ctx context.Context, instance config.Instance) (Credential, error) {
+	for _, provider := range resolver.providers {
+		credential, err := provider.Credential(ctx, instance)
+		if err == nil {
+			return credential, nil
+		}
+		if !errors.Is(err, ErrCredentialUnavailable) {
+			return Credential{}, err
+		}
 	}
-	return credential, nil
+	return Credential{}, fmt.Errorf("resolve credential: %w", ErrCredentialUnavailable)
 }
 
 type Credential struct {

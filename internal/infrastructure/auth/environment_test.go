@@ -20,7 +20,7 @@ func TestEnvironmentProviderSuppliesCredentialThroughApplicationResolver(t *test
 		return "", false
 	}}
 
-	credential, err := applicationauth.NewResolver(provider).Resolve(context.Background(), "FORGEJO_TOKEN")
+	credential, err := applicationauth.NewResolver(provider).Resolve(context.Background(), config.Instance{Name: "work", Endpoint: "https://forgejo.example", Credential: "FORGEJO_TOKEN"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestEnvironmentProviderRejectsUnavailableCredentialsSafely(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			provider := EnvironmentProvider{lookupEnv: test.lookup}
-			_, err := applicationauth.NewResolver(provider).Resolve(context.Background(), test.reference)
+			_, err := applicationauth.NewResolver(provider).Resolve(context.Background(), config.Instance{Name: "work", Endpoint: "https://forgejo.example", Credential: test.reference})
 			if !errors.Is(err, applicationauth.ErrCredentialUnavailable) {
 				t.Fatalf("Resolve() error = %v, want ErrCredentialUnavailable", err)
 			}

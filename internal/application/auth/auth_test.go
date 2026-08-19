@@ -10,27 +10,27 @@ import (
 	"github.com/l4l4dev/fj/internal/application/config"
 )
 
-type providerFunc func(context.Context, config.CredentialReference) (Credential, error)
+type providerFunc func(context.Context, config.Instance) (Credential, error)
 
-func (provider providerFunc) Credential(ctx context.Context, reference config.CredentialReference) (Credential, error) {
-	return provider(ctx, reference)
+func (provider providerFunc) Credential(ctx context.Context, instance config.Instance) (Credential, error) {
+	return provider(ctx, instance)
 }
 
 func TestResolverSuppliesCredential(t *testing.T) {
-	const reference config.CredentialReference = "work-token"
+	instance := config.Instance{Name: "work", Endpoint: "https://forgejo.example", Credential: "work-token"}
 	const secret = "secret-token"
-	var receivedReference config.CredentialReference
-	resolver := NewResolver(providerFunc(func(_ context.Context, received config.CredentialReference) (Credential, error) {
-		receivedReference = received
+	var receivedInstance config.Instance
+	resolver := NewResolver(providerFunc(func(_ context.Context, received config.Instance) (Credential, error) {
+		receivedInstance = received
 		return NewCredential(secret), nil
 	}))
 
-	credential, err := resolver.Resolve(context.Background(), reference)
+	credential, err := resolver.Resolve(context.Background(), instance)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if receivedReference != reference {
-		t.Errorf("provider reference = %q, want %q", receivedReference, reference)
+	if receivedInstance != instance {
+		t.Errorf("provider instance = %#v, want %#v", receivedInstance, instance)
 	}
 	if credential.Value() != secret {
 		t.Errorf("credential value = %q, want supplied value", credential.Value())
@@ -42,19 +42,67 @@ func TestResolverSuppliesCredential(t *testing.T) {
 	}
 }
 
-func TestResolverRedactsProviderError(t *testing.T) {
-	resolver := NewResolver(providerFunc(func(context.Context, config.CredentialReference) (Credential, error) {
-		return Credential{}, errors.New("secret-token is unavailable")
+func TestResolverTriesProvidersInOrder(t *testing.T) {
+	var calls []string
+	resolver := NewResolver(
+		providerFunc(func(context.Context, config.Instance) (Credential, error) {
+			calls = append(calls, "first")
+			return Credential{}, fmt.Errorf("environment: %w", ErrCredentialUnavailable)
+		}),
+		providerFunc(func(context.Context, config.Instance) (Credential, error) {
+			calls = append(calls, "second")
+			return NewCredential("stored-value"), nil
+		}),
+		providerFunc(func(context.Context, config.Instance) (Credential, error) {
+			calls = append(calls, "third")
+			return NewCredential("never-reached"), nil
+		}),
+	)
+
+	credential, err := resolver.Resolve(context.Background(), config.Instance{Name: "work"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if credential.Value() != "stored-value" {
+		t.Errorf("credential value = %q, want the second provider value", credential.Value())
+	}
+	if strings.Join(calls, ",") != "first,second" {
+		t.Errorf("provider calls = %v, want first then second only", calls)
+	}
+}
+
+func TestResolverReportsUnavailableWhenNoProviderHasCredential(t *testing.T) {
+	resolver := NewResolver(providerFunc(func(context.Context, config.Instance) (Credential, error) {
+		return Credential{}, ErrCredentialUnavailable
 	}))
 
-	_, err := resolver.Resolve(context.Background(), "work-token")
+	_, err := resolver.Resolve(context.Background(), config.Instance{Name: "work"})
 	if !errors.Is(err, ErrCredentialUnavailable) {
 		t.Fatalf("Resolve() error = %v", err)
 	}
 	if got := err.Error(); got != "resolve credential: credential unavailable" {
 		t.Errorf("Resolve() error = %q", got)
 	}
-	if strings.Contains(err.Error(), "secret-token") {
-		t.Errorf("Resolve() error exposes credential material: %q", err)
+}
+
+func TestResolverAbortsOnRealProviderError(t *testing.T) {
+	failure := errors.New("credentials file is malformed")
+	var secondCalled bool
+	resolver := NewResolver(
+		providerFunc(func(context.Context, config.Instance) (Credential, error) {
+			return Credential{}, failure
+		}),
+		providerFunc(func(context.Context, config.Instance) (Credential, error) {
+			secondCalled = true
+			return NewCredential("stored-value"), nil
+		}),
+	)
+
+	_, err := resolver.Resolve(context.Background(), config.Instance{Name: "work"})
+	if !errors.Is(err, failure) {
+		t.Fatalf("Resolve() error = %v, want the provider error", err)
+	}
+	if secondCalled {
+		t.Error("Resolve() continued after a real provider error")
 	}
 }

@@ -58,6 +58,57 @@ func TestConfigurationPath(t *testing.T) {
 	}
 }
 
+func TestCredentialsPathLocation(t *testing.T) {
+	tests := []struct {
+		name    string
+		env     map[string]string
+		want    string
+		wantErr string
+	}{
+		{
+			name: "absolute XDG config home",
+			env:  map[string]string{"XDG_CONFIG_HOME": "/tmp/config", "HOME": "/tmp/home"},
+			want: "/tmp/config/fj/credentials.toml",
+		},
+		{
+			name: "home fallback",
+			env:  map[string]string{"HOME": "/tmp/home"},
+			want: "/tmp/home/.config/fj/credentials.toml",
+		},
+		{
+			name:    "relative XDG config home",
+			env:     map[string]string{"XDG_CONFIG_HOME": "config", "HOME": "/tmp/home"},
+			wantErr: "XDG_CONFIG_HOME must be an absolute path",
+		},
+		{
+			name:    "home is unset",
+			env:     map[string]string{},
+			wantErr: "HOME must be set when XDG_CONFIG_HOME is unset",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := credentialsPath(func(name string) (string, bool) {
+				value, ok := test.env[name]
+				return value, ok
+			})
+			if test.wantErr != "" {
+				if err == nil || err.Error() != test.wantErr {
+					t.Fatalf("credentialsPath() error = %v, want %q", err, test.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != test.want {
+				t.Errorf("credentialsPath() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestLoadUsesXDGConfiguration(t *testing.T) {
 	configHome := t.TempDir()
 	home := t.TempDir()

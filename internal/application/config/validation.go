@@ -24,9 +24,6 @@ func (configuration Configuration) Validate() error {
 		if err := validateEndpoint(instance.Name, instance.Endpoint); err != nil {
 			return err
 		}
-		if strings.TrimSpace(string(instance.Credential)) == "" {
-			return fmt.Errorf("instance %q: credential reference is required", instance.Name)
-		}
 	}
 
 	return nil

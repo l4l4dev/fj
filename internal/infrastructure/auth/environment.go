@@ -16,12 +16,12 @@ func NewEnvironmentProvider() EnvironmentProvider {
 	return EnvironmentProvider{lookupEnv: os.LookupEnv}
 }
 
-func (provider EnvironmentProvider) Credential(_ context.Context, reference config.CredentialReference) (applicationauth.Credential, error) {
-	if reference == "" || provider.lookupEnv == nil {
+func (provider EnvironmentProvider) Credential(_ context.Context, instance config.Instance) (applicationauth.Credential, error) {
+	if instance.Credential == "" || provider.lookupEnv == nil {
 		return applicationauth.Credential{}, applicationauth.ErrCredentialUnavailable
 	}
 
-	value, ok := provider.lookupEnv(string(reference))
+	value, ok := provider.lookupEnv(string(instance.Credential))
 	if !ok || value == "" {
 		return applicationauth.Credential{}, applicationauth.ErrCredentialUnavailable
 	}

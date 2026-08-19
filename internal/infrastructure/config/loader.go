@@ -10,7 +10,10 @@ import (
 	applicationconfig "github.com/l4l4dev/fj/internal/application/config"
 )
 
-const configurationRelativePath = "fj/config.toml"
+const (
+	configurationRelativePath = "fj/config.toml"
+	credentialsRelativePath   = "fj/credentials.toml"
+)
 
 type environmentLookup func(string) (string, bool)
 
@@ -62,18 +65,32 @@ func load(getenv environmentLookup, readFile func(string) ([]byte, error)) (appl
 	return configuration, nil
 }
 
+// CredentialsPath reports the XDG location of the credentials file written by
+// `fj auth login`.
+func CredentialsPath() (string, error) {
+	return credentialsPath(os.LookupEnv)
+}
+
 func configurationPath(getenv environmentLookup) (string, error) {
+	return xdgPath(getenv, configurationRelativePath)
+}
+
+func credentialsPath(getenv environmentLookup) (string, error) {
+	return xdgPath(getenv, credentialsRelativePath)
+}
+
+func xdgPath(getenv environmentLookup, relativePath string) (string, error) {
 	base, xdgSet := getenv("XDG_CONFIG_HOME")
 	if xdgSet && strings.TrimSpace(base) != "" {
 		if !filepath.IsAbs(base) {
 			return "", fmt.Errorf("XDG_CONFIG_HOME must be an absolute path")
 		}
-		return filepath.Join(base, configurationRelativePath), nil
+		return filepath.Join(base, relativePath), nil
 	}
 
 	home, homeSet := getenv("HOME")
 	if !homeSet || strings.TrimSpace(home) == "" {
 		return "", fmt.Errorf("HOME must be set when XDG_CONFIG_HOME is unset")
 	}
-	return filepath.Join(home, ".config", configurationRelativePath), nil
+	return filepath.Join(home, ".config", relativePath), nil
 }

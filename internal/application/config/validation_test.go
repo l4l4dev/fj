@@ -23,7 +23,7 @@ func TestConfigurationValidate(t *testing.T) {
 		{name: "missing endpoint", configuration: Configuration{Instances: []Instance{{Name: "work", Credential: validInstance.Credential}}}, wantError: "instance \"work\": endpoint is required"},
 		{name: "invalid endpoint", configuration: Configuration{Instances: []Instance{{Name: "work", Endpoint: "forgejo.example", Credential: validInstance.Credential}}}, wantError: "instance \"work\": endpoint must be an absolute HTTP or HTTPS URL"},
 		{name: "endpoint credentials", configuration: Configuration{Instances: []Instance{{Name: "work", Endpoint: "https://user:secret@forgejo.example", Credential: validInstance.Credential}}}, wantError: "instance \"work\": endpoint must not contain credentials"},
-		{name: "missing credential reference", configuration: Configuration{Instances: []Instance{{Name: "work", Endpoint: validInstance.Endpoint}}}, wantError: "instance \"work\": credential reference is required"},
+		{name: "omitted credential reference", configuration: Configuration{Instances: []Instance{{Name: "work", Endpoint: validInstance.Endpoint}}}},
 	}
 
 	for _, test := range tests {

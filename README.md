@@ -234,6 +234,36 @@ the credential value in the environment; never put the token itself in
 export FORGEJO_PLAYGROUND_TOKEN="<token-not-shown>"
 ```
 
+### Registering a token with `fj auth login`
+
+As an alternative to the environment variable, `fj auth login` stores a token
+for the selected profile. The `credential` field may then be omitted from
+`config.toml`.
+
+```bash
+fj auth login --instance playground
+```
+
+On a terminal the token is requested with a hidden prompt, so it never appears
+on screen or in shell history. For pipes and scripts, read it from standard
+input instead:
+
+```bash
+fj auth login --instance playground --token-stdin < token-file
+```
+
+There is no flag that accepts the token as an argument; a token passed on the
+command line would be visible in the process list.
+
+The token is verified against the instance before it is stored, and is written
+to `$XDG_CONFIG_HOME/fj/credentials.toml` (`$HOME/.config/fj/credentials.toml`
+when `XDG_CONFIG_HOME` is unset) with owner-only file permissions in an
+owner-only directory.
+
+Environment variables take precedence: when the profile names a `credential`
+variable and that variable is set, its value is used and the stored token is
+ignored.
+
 Use `--instance playground` to select the profile explicitly. With exactly one
 configured profile, `--instance` may be omitted. When multiple profiles are
 configured, an explicit `--instance` is required.

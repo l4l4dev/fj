@@ -85,6 +85,7 @@ func newRootCommand(dependencies RepositoryDependencies, version string) *cobra.
 	command.SetContext(context.WithValue(context.Background(), versionContextKey{}, version))
 	command.PersistentFlags().BoolVar(&versionFlag, "version", false, "print the fj version")
 	command.AddCommand(newVersionCommand(version))
+	command.AddCommand(newAuthCommand())
 	command.AddCommand(newRepositoryCommand(dependencies))
 	command.AddCommand(newIssueCommand(dependencies.Issues, dependencies.IssueInspector, dependencies.IssueCreator, dependencies.IssueUpdater, dependencies.IssueStateChanger, dependencies.CommentViewer, dependencies.CommentCreator, dependencies.LabelAdder, dependencies.LabelRemover, dependencies.MilestoneSetter, dependencies.MilestoneClearer, dependencies.Assigner, dependencies.Unassigner))
 	command.AddCommand(newPullRequestCommand(pullRequestDependencies{lister: dependencies.PullRequests, inspector: dependencies.PullRequestInspector, creator: dependencies.PullRequestCreator, updater: dependencies.PullRequestUpdater, statusViewer: dependencies.PullRequestStatusViewer, reviewSubmitter: dependencies.PullRequestReviewSubmitter, commentViewer: dependencies.PullRequestCommentViewer, commentCreator: dependencies.PullRequestCommentCreator, merger: dependencies.PullRequestMerger, closer: dependencies.PullRequestCloser}))
@@ -128,9 +129,9 @@ func composeRepositoryDependencies(ctx context.Context, instanceName string) (Re
 	if err != nil {
 		return RepositoryDependencies{}, newCommandError(categoryValidation, "select instance", err)
 	}
-	credential, err := applicationauth.NewResolver(infrastructureauth.NewEnvironmentProvider()).Resolve(ctx, instance.Credential)
+	credential, err := applicationauth.NewResolver(infrastructureauth.NewEnvironmentProvider(), infrastructureauth.NewFileProvider()).Resolve(ctx, instance)
 	if err != nil {
-		return RepositoryDependencies{}, newCommandError(categoryAuthentication, "resolve credential", err)
+		return RepositoryDependencies{}, newCommandErrorWithMessage(categoryAuthentication, "resolve credential", "authentication failed; set the credential environment variable or run fj auth login", err)
 	}
 	version := versionFromContext(ctx)
 	adapter := infrastructurerepository.NewRESTAdapter(forgejo.NewClient(instance, credential, version, nil))
