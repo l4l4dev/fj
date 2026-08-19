@@ -1,0 +1,90 @@
+package release
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"testing"
+
+	"github.com/l4l4dev/fj/internal/application/apperror"
+	applicationrelease "github.com/l4l4dev/fj/internal/application/release"
+)
+
+type stubTransport struct {
+	path  string
+	query url.Values
+	body  string
+}
+
+func (s *stubTransport) Do(_ context.Context, _ string, path string, query url.Values) (*http.Response, error) {
+	s.path, s.query = path, query
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(s.body))}, nil
+}
+
+type statusError int
+
+func (err statusError) Error() string   { return "remote failure" }
+func (err statusError) StatusCode() int { return int(err) }
+
+type errorTransport struct{ err error }
+
+func (transport errorTransport) Do(context.Context, string, string, url.Values) (*http.Response, error) {
+	return nil, transport.err
+}
+
+func TestRESTAdapterList(t *testing.T) {
+	transport := &stubTransport{body: `[{"id":1,"tag_name":"v1.0.0","name":"First release","draft":false,"prerelease":false},{"id":2,"tag_name":"v1.1.0-rc1","name":"Release candidate","draft":false,"prerelease":true},{"id":3,"tag_name":"v0.1.0","name":"Draft","draft":true,"prerelease":false}]`}
+	result, err := NewRESTAdapter(transport).List(context.Background(), applicationrelease.ListRequest{Owner: "alice", Name: "project", Page: 2, Limit: 20})
+	if err != nil || len(result) != 3 {
+		t.Fatalf("unexpected result: %+v err=%v", result, err)
+	}
+	if result[0].TagName != "v1.0.0" || result[0].Title != "First release" || result[0].Draft || result[0].Prerelease {
+		t.Fatalf("unexpected release 0: %+v", result[0])
+	}
+	if result[1].Prerelease != true {
+		t.Fatalf("unexpected release 1: %+v", result[1])
+	}
+	if result[2].Draft != true {
+		t.Fatalf("unexpected release 2: %+v", result[2])
+	}
+	if transport.path != "/api/v1/repos/alice/project/releases" || transport.query.Get("page") != "2" || transport.query.Get("limit") != "20" {
+		t.Fatalf("unexpected request: path=%s query=%v", transport.path, transport.query)
+	}
+}
+
+func TestRESTAdapterListEmpty(t *testing.T) {
+	result, err := NewRESTAdapter(&stubTransport{body: `[]`}).List(context.Background(), applicationrelease.ListRequest{Owner: "alice", Name: "project", Page: 1, Limit: 20})
+	if err != nil || result == nil || len(result) != 0 {
+		t.Fatalf("unexpected empty result: %#v err=%v", result, err)
+	}
+}
+
+func TestRESTAdapterListMapsHTTPError(t *testing.T) {
+	tests := []struct {
+		status   int
+		category apperror.Category
+	}{
+		{http.StatusUnauthorized, apperror.Authentication},
+		{http.StatusForbidden, apperror.Authentication},
+		{http.StatusNotFound, apperror.NotFound},
+		{http.StatusInternalServerError, apperror.Remote},
+	}
+	for _, test := range tests {
+		_, err := NewRESTAdapter(errorTransport{err: statusError(test.status)}).List(context.Background(), applicationrelease.ListRequest{Owner: "alice", Name: "project", Page: 1, Limit: 20})
+		var appErr apperror.Error
+		if !errors.As(err, &appErr) || appErr.Category != test.category {
+			t.Fatalf("status %d: unexpected error %#v", test.status, err)
+		}
+	}
+}
+
+func TestRESTAdapterListMapsNotFoundSafely(t *testing.T) {
+	_, err := NewRESTAdapter(errorTransport{err: statusError(http.StatusNotFound)}).List(context.Background(), applicationrelease.ListRequest{Owner: "example-owner", Name: "example-repository", Page: 1, Limit: 20})
+	var appErr apperror.Error
+	if !errors.As(err, &appErr) || appErr.Category != apperror.NotFound || appErr.Message != "repository not found" {
+		t.Fatalf("error = %#v, want safe not-found application error", err)
+	}
+}
