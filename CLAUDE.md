@@ -10,10 +10,22 @@ This document provides Claude Code-specific guidance that supplements [AGENTS.md
 
 ## Model Selection
 
-Follow AGENTS.md Section 14. In Claude Code, the session's default model is
-fine for routine tasks; use the most capable available model (currently
-Fable 5) for major changes and their reviews. Do not record model choices per
-task.
+Follow AGENTS.md Section 14. In Claude Code, when the main session runs
+Fable 5, it acts as an orchestrator: it plans, delegates, verifies, and
+reports, and hands implementation work to subagents chosen by task content:
+
+- **Haiku** for mechanical, well-templated edits.
+- **Sonnet** for routine implementation that follows existing patterns.
+- **Opus** for heavier implementation, broad changes, or moderate
+  investigation.
+- **Fable 5** (main session or fork) only for complex design decisions,
+  difficult investigations, rework-prone bug fixes, and major-change reviews.
+
+Delegation prompts must name the target files, the existing patterns to
+follow, the acceptance criteria, and the verification commands. The main
+session verifies subagent results (tests, `make pre-commit`) before adopting
+them. Changes small enough that delegation costs more than doing them may be
+done directly. Do not record model choices per task.
 
 ## Major-Change Reviews
 
