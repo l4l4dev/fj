@@ -199,6 +199,16 @@ func (a *RESTAdapter) Publish(ctx context.Context, request applicationrelease.Pu
 	return applicationrelease.ReleaseDetail{ID: decoded.ID, TagName: decoded.TagName, Title: decoded.Name, Draft: decoded.Draft, Prerelease: decoded.Prerelease, Notes: decoded.Body, Assets: assets}, nil
 }
 
+func (a *RESTAdapter) Delete(ctx context.Context, request applicationrelease.DeleteRequest) error {
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/releases/" + strconv.FormatInt(request.ID, 10)
+	response, err := a.transport.Do(ctx, http.MethodDelete, path, nil)
+	if err != nil {
+		return translateDeleteError(err)
+	}
+	response.Body.Close()
+	return nil
+}
+
 func (a *RESTAdapter) UploadAsset(ctx context.Context, request applicationrelease.UploadAssetRequest) (applicationrelease.Asset, error) {
 	rawClient, ok := a.transport.(rawTransport)
 	if !ok {
@@ -277,6 +287,21 @@ func (a *RESTAdapter) resolveReleaseByTag(ctx context.Context, owner, name, tag,
 		return forgejoReleaseDetail{}, apperror.New(apperror.Remote, operation, "")
 	}
 	return decoded, nil
+}
+
+func translateDeleteError(err error) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		switch status.StatusCode() {
+		case 401, 403:
+			return apperror.New(apperror.Authentication, "delete release", "permission denied or authentication failed")
+		case 404:
+			return apperror.New(apperror.NotFound, "delete release", "release not found")
+		case 405, 409, 422:
+			return apperror.New(apperror.Conflict, "delete release", "release could not be deleted in its current state")
+		}
+	}
+	return apperror.New(apperror.Remote, "delete release", "")
 }
 
 func translateAssetError(err error, operation string) error {
@@ -376,3 +401,4 @@ var _ applicationrelease.Updater = (*RESTAdapter)(nil)
 var _ applicationrelease.Publisher = (*RESTAdapter)(nil)
 var _ applicationrelease.AssetUploader = (*RESTAdapter)(nil)
 var _ applicationrelease.AssetDeleter = (*RESTAdapter)(nil)
+var _ applicationrelease.Deleter = (*RESTAdapter)(nil)

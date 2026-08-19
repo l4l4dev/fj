@@ -82,6 +82,11 @@ func (releasePresenter) PresentPublished(w io.Writer, detail applicationrelease.
 	return err
 }
 
+func (releasePresenter) PresentDeleted(w io.Writer, detail applicationrelease.ReleaseDetail) error {
+	_, err := fmt.Fprintf(w, "Release deleted: %s (%s)\nThe git tag %s was not deleted.\n", detail.TagName, detail.Title, detail.TagName)
+	return err
+}
+
 func (releasePresenter) PresentAssets(w io.Writer, detail applicationrelease.ReleaseDetail) error {
 	if len(detail.Assets) == 0 {
 		_, err := fmt.Fprintf(w, "Assets for %s: none\n", detail.TagName)

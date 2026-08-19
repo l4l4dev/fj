@@ -502,3 +502,70 @@ func TestReleaseAssetDeleteRejectsInvalidInput(t *testing.T) {
 		}
 	}
 }
+
+type releaseDeleterStub struct {
+	called  bool
+	request applicationrelease.DeleteRequest
+}
+
+func (s *releaseDeleterStub) Delete(_ context.Context, request applicationrelease.DeleteRequest) error {
+	s.called = true
+	s.request = request
+	return nil
+}
+
+func TestReleaseDeleteOutputAndRequest(t *testing.T) {
+	inspector := &releaseInspectorStub{detail: applicationrelease.ReleaseDetail{ID: 7, TagName: "v1.0.0", Title: "First release"}}
+	deleter := &releaseDeleterStub{}
+	command := newReleaseDeleteCommand(inspector, deleter)
+	command.SetArgs([]string{"alice/project", "v1.0.0", "--confirm"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !deleter.called || deleter.request.ID != 7 || deleter.request.Owner != "alice" || deleter.request.Name != "project" {
+		t.Fatalf("unexpected request: %+v", deleter.request)
+	}
+	want := "Release deleted: v1.0.0 (First release)\nThe git tag v1.0.0 was not deleted.\n"
+	if output.String() != want {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+}
+
+func TestReleaseDeleteRequiresConfirm(t *testing.T) {
+	inspector := &releaseInspectorStub{detail: applicationrelease.ReleaseDetail{ID: 7, TagName: "v1.0.0", Title: "First release"}}
+	deleter := &releaseDeleterStub{}
+	command := newReleaseDeleteCommand(inspector, deleter)
+	command.SetArgs([]string{"alice/project", "v1.0.0"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err == nil {
+		t.Fatal("expected an error when --confirm is absent")
+	}
+	if deleter.called {
+		t.Fatal("deleter must not be called without --confirm")
+	}
+	if inspector.request.Tag != "" {
+		t.Fatal("inspector must not be called without --confirm")
+	}
+	if strings.Contains(output.String(), "Release deleted:") {
+		t.Fatalf("expected no success output on failure, got %q", output.String())
+	}
+}
+
+func TestReleaseDeleteRejectsInvalidInput(t *testing.T) {
+	tests := [][]string{
+		{},
+		{"alice/project"},
+		{"invalid", "v1.0.0", "--confirm"},
+		{"alice/project", "  ", "--confirm"},
+	}
+	for _, args := range tests {
+		command := newReleaseDeleteCommand(&releaseInspectorStub{}, &releaseDeleterStub{})
+		command.SetArgs(args)
+		if err := command.Execute(); err == nil {
+			t.Fatalf("expected validation error for %v", args)
+		}
+	}
+}

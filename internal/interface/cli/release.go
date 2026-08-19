@@ -16,6 +16,7 @@ type releaseDependencies struct {
 	creator       applicationrelease.Creator
 	updater       applicationrelease.Updater
 	publisher     applicationrelease.Publisher
+	deleter       applicationrelease.Deleter
 	assetUploader applicationrelease.AssetUploader
 	assetDeleter  applicationrelease.AssetDeleter
 }
@@ -27,6 +28,7 @@ func newReleaseCommand(dependencies releaseDependencies) *cobra.Command {
 	command.AddCommand(newReleaseCreateCommand(dependencies.creator))
 	command.AddCommand(newReleaseUpdateCommand(dependencies.updater))
 	command.AddCommand(newReleasePublishCommand(dependencies.inspector, dependencies.publisher))
+	command.AddCommand(newReleaseDeleteCommand(dependencies.inspector, dependencies.deleter))
 	command.AddCommand(newReleaseAssetCommand(dependencies.inspector, dependencies.assetUploader, dependencies.assetDeleter))
 	return command
 }
@@ -272,6 +274,51 @@ func newReleasePublishCommand(inspector applicationrelease.Inspector, publisher 
 		}
 		return (releasePresenter{}).PresentPublished(command.OutOrStdout(), result)
 	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
+	return command
+}
+
+func newReleaseDeleteCommand(inspector applicationrelease.Inspector, deleter applicationrelease.Deleter) *cobra.Command {
+	var instance string
+	var confirm bool
+	command := &cobra.Command{Use: "delete OWNER/NAME TAG", Short: "Delete a release", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 2 {
+			return newCommandError(categoryValidation, "delete release", fmt.Errorf("OWNER/NAME and release tag are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "delete release", err)
+		}
+		if strings.TrimSpace(args[1]) == "" {
+			return newCommandError(categoryValidation, "delete release", fmt.Errorf("release tag is required"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if !confirm {
+			return newCommandError(categoryValidation, "delete release", fmt.Errorf("deleting a release requires --confirm; the release and its assets are removed, the git tag is kept"))
+		}
+		if inspector == nil || deleter == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			if inspector == nil {
+				inspector = dependencies.ReleaseInspector
+			}
+			if deleter == nil {
+				deleter = dependencies.ReleaseDeleter
+			}
+			if inspector == nil || deleter == nil {
+				return newCommandError(categoryInternal, "delete release", fmt.Errorf("release deleter unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		result, err := applicationrelease.NewDeleteUseCase(inspector, deleter).Execute(command.Context(), applicationrelease.InspectRequest{Owner: parts[0], Name: parts[1], Tag: args[1]})
+		if err != nil {
+			return mapApplicationError(err, "delete release")
+		}
+		return (releasePresenter{}).PresentDeleted(command.OutOrStdout(), result)
+	}}
+	command.Flags().BoolVar(&confirm, "confirm", false, "confirm deleting the release")
 	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }

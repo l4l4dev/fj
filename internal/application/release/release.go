@@ -95,6 +95,16 @@ type AssetUploader interface {
 	UploadAsset(context.Context, UploadAssetRequest) (Asset, error)
 }
 
+type DeleteRequest struct {
+	Owner string
+	Name  string
+	ID    int64
+}
+
+type Deleter interface {
+	Delete(context.Context, DeleteRequest) error
+}
+
 type DeleteAssetRequest struct {
 	Owner     string
 	Name      string

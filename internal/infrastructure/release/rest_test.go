@@ -516,3 +516,45 @@ func TestRESTAdapterDeleteAssetMapsResolveHTTPError(t *testing.T) {
 		t.Fatalf("error = %#v, want safe not-found application error", err)
 	}
 }
+
+func TestRESTAdapterDeleteUsesResolvedID(t *testing.T) {
+	transport := &assetStubTransport{}
+	if err := NewRESTAdapter(transport).Delete(context.Background(), applicationrelease.DeleteRequest{Owner: "alice", Name: "project", ID: 7}); err != nil {
+		t.Fatal(err)
+	}
+	if transport.doMethod != http.MethodDelete || transport.doPath != "/api/v1/repos/alice/project/releases/7" {
+		t.Fatalf("unexpected delete request: method=%s path=%s", transport.doMethod, transport.doPath)
+	}
+}
+
+func TestRESTAdapterDeleteMapsHTTPError(t *testing.T) {
+	tests := []struct {
+		status   int
+		category apperror.Category
+	}{
+		{http.StatusUnauthorized, apperror.Authentication},
+		{http.StatusForbidden, apperror.Authentication},
+		{http.StatusNotFound, apperror.NotFound},
+		{http.StatusMethodNotAllowed, apperror.Conflict},
+		{http.StatusConflict, apperror.Conflict},
+		{http.StatusUnprocessableEntity, apperror.Conflict},
+		{http.StatusInternalServerError, apperror.Remote},
+	}
+	for _, test := range tests {
+		transport := &assetStubTransport{doErr: statusError(test.status)}
+		err := NewRESTAdapter(transport).Delete(context.Background(), applicationrelease.DeleteRequest{Owner: "alice", Name: "project", ID: 7})
+		var appErr apperror.Error
+		if !errors.As(err, &appErr) || appErr.Category != test.category {
+			t.Fatalf("status %d: unexpected error %#v", test.status, err)
+		}
+	}
+}
+
+func TestRESTAdapterDeleteMapsNotFoundSafely(t *testing.T) {
+	transport := &assetStubTransport{doErr: statusError(http.StatusNotFound)}
+	err := NewRESTAdapter(transport).Delete(context.Background(), applicationrelease.DeleteRequest{Owner: "alice", Name: "project", ID: 7})
+	var appErr apperror.Error
+	if !errors.As(err, &appErr) || appErr.Category != apperror.NotFound || appErr.Message != "release not found" {
+		t.Fatalf("error = %#v, want safe not-found application error", err)
+	}
+}
