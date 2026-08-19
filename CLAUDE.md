@@ -10,20 +10,19 @@ This document provides Claude Code-specific guidance that supplements [AGENTS.md
 
 ## Model Selection
 
-Follow the model-selection and recording rules in AGENTS.md Section 14. In Claude Code:
-
-- Use Fable 5 for design work, important reviews, and verification of major changes as defined in AGENTS.md Section 15.
-- Small, well-defined implementation work may use a lighter model.
-- Decide the model before starting the task, and record the model and the reason in the Backlog task following AGENTS.md Section 14, including its check for an official CLI field.
+Follow AGENTS.md Section 14. In Claude Code, the session's default model is
+fine for routine tasks; use the most capable available model (currently
+Fable 5) for major changes and their reviews. Do not record model choices per
+task.
 
 ## Major-Change Reviews
 
-For major changes (AGENTS.md Section 15), perform both reviews with Fable 5:
+Only for major changes (AGENTS.md Section 15):
 
-- The pre-implementation check is requested from an agent or subagent running Fable 5.
-- The post-implementation review is an independent review by an agent or subagent running Fable 5; if the main session produced the implementation, use a separate Fable 5 subagent so the review stays independent.
-- Classify findings and handle fixes according to the Review Finding Classification in AGENTS.md Section 15.
-- Report the results to the human. Never commit before human approval.
+- Request the pre-implementation check and the post-implementation review from Fable 5; if the main session produced the implementation, use a separate Fable 5 subagent so the review stays independent.
+- Classify findings per AGENTS.md Section 15 and report the results to the human. Never commit before human approval.
+
+Routine tasks need neither review; they follow the single loop in DEVELOPMENT_WORKFLOW.md.
 
 <!-- BACKLOG.MD GUIDELINES START -->
 <CRITICAL_INSTRUCTION>

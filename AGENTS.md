@@ -36,15 +36,16 @@ If sources conflict or requirements are unclear, stop and ask for clarification.
 
 ## 4. Development Workflow
 
-For reusable task workflow and AI prompt templates, see [`backlog/templates/README.md`](backlog/templates/README.md).
+For the task workflow reference, see [`backlog/templates/README.md`](backlog/templates/README.md).
 
 1. Work on only one task at a time.
-2. Read the relevant documentation, code, tests, and recent changes.
-3. Confirm the task scope, constraints, and approval state.
-4. Propose a design when required and wait for approval.
-5. Implement only the approved scope in small, reviewable changes.
-6. Update affected documentation and tests.
-7. Run `make pre-commit` when the Makefile is available, and report the results,
+2. Read the task and the documentation, code, and tests it touches.
+3. Present a short implementation plan and wait for human approval before
+   implementing. A plan-mode approval or an explicit chat approval is
+   sufficient; record it in the task in one line.
+4. Implement only the approved scope in small, reviewable changes, with tests.
+5. Update affected documentation.
+6. Run `make pre-commit` when the Makefile is available, and report the results,
    limitations, and remaining work.
 
 ## 5. Task Execution Rules
@@ -132,19 +133,16 @@ A task is done only when:
 
 When resuming work in this repository:
 
-1. Read `PROJECT_CONSTITUTION.md` first.
-2. Read `ARCHITECTURE.md`.
-3. Read `ROADMAP.md`.
-4. Run `backlog instructions overview`.
-5. Use Backlog.md to determine the next unfinished task.
-6. Read only the documents required for that task.
-7. Never continue work from chat history alone.
-8. Treat the repository as the single source of truth for project state and continuity.
-9. If the previous task is already Done, automatically continue with the next task unless the user explicitly requests otherwise.
-10. Before implementing, summarize the task that will be worked on.
-11. Select tasks according to Backlog.md status and dependencies, not task numbers.
-12. When multiple tasks are available, choose the highest-priority task according to Backlog.md.
-13. Treat task IDs as identifiers only; never use them as execution order.
+1. Run `backlog instructions overview`.
+2. Use Backlog.md to determine the next unfinished task.
+3. Read only the documents required for that task; consult
+   `PROJECT_CONSTITUTION.md`, `ARCHITECTURE.md`, and `ROADMAP.md` when the
+   task touches principles, architecture boundaries, or roadmap direction.
+4. Never continue work from chat history alone.
+5. Treat the repository as the single source of truth for project state and continuity.
+6. If the previous task is already Done, automatically continue with the next task unless the user explicitly requests otherwise.
+7. Before implementing, summarize the task that will be worked on.
+8. Select tasks according to Backlog.md status and dependencies, not task numbers; when multiple tasks are available, choose the highest-priority task.
 
 ## 13. Human Approval Boundaries
 
@@ -164,11 +162,11 @@ When resuming work in this repository:
 
 ## 14. Model Selection
 
-- Before starting a task, choose a model appropriate for the work: use the most capable model available on the agent platform for design, significant reviews, and verification of major changes; small, well-defined implementation work may use a lighter model.
+- Use the platform's default capable model for routine work. Use the most
+  capable model available on the platform for major changes (Section 15) and
+  their reviews.
 - Platform-specific model names and dispatch mechanics belong in platform files such as `CLAUDE.md`, not here.
-- Record the model used and the reason for choosing it in the Backlog task.
-- Before recording, check `backlog task edit --help` for an official model field. If one exists, use it. If none exists, do not invent custom metadata fields or edit task files directly; propose recording the model in the task's implementation plan or notes and wait for human approval of that method.
-- Approved recording method (the current CLI has no model field): append one line to the task's Implementation Notes through the `backlog` CLI in the format `Model: <model name> — <reason>`, for example `backlog task edit TASK-123 --append-notes "Model: Fable 5 — architecture-sensitive design"`. Do not add custom Backlog fields. If a future CLI version introduces an official model field, prefer it per the rule above.
+- Do not record model choices per task.
 
 ## 15. Major Changes
 
@@ -178,15 +176,23 @@ A change is a major change when it involves any of the following:
 - changing important rules in `AGENTS.md`;
 - modifying `ARCHITECTURE.md`;
 - modifying `ROADMAP.md`;
-- changing public CLI commands, flags, output formats, JSON contracts, or exit codes;
-- changing a public API or compatibility guarantee;
+- breaking or incompatible changes to existing public CLI commands, flags,
+  output formats, JSON contracts, exit codes, or other compatibility
+  guarantees;
 - adding a new external dependency;
 - changing package structure or dependency direction;
 - changing authentication, credential handling, or security boundaries;
 - affecting multiple milestones;
 - large-scale refactoring.
 
+Adding a new command, subcommand, or flag that follows existing architecture
+and CLI patterns is routine work, not a major change.
+
 Judge by user impact, compatibility, security, and design boundaries, not by line or file counts alone. When unsure whether a change is major, treat it as major and ask a human.
+
+The pre-implementation check and post-implementation review below apply only
+to major changes. Routine tasks need neither; they follow the workflow in
+Section 4.
 
 ### Pre-Implementation Check
 
@@ -225,7 +231,12 @@ Classify every review finding as one of four severities:
 - **Minor:** a small defect or inconsistency.
 - **Suggestion:** an optional improvement.
 
-AI may present findings at any severity. For Major, Minor, and Suggestion findings, AI must not implement fixes on its own; a human decides for each finding whether it is adopted, deferred, or rejected before any fix is made. Critical findings are reported to a human with the highest priority. AI may propose a fix for a Critical finding and, where necessary, implement it, but it must then stop and wait for human confirmation instead of continuing the task or advancing to the next phase. Section 10 governs all commits and pushes regardless of severity.
+Critical and Major findings require an immediate stop and a human decision;
+AI may propose or implement a fix for a Critical finding but must then wait
+for human confirmation. Minor findings may be fixed within the approved scope
+without a separate decision, or recorded as deferred. Suggestions are recorded
+when they affect future work. Section 10 governs all commits and pushes
+regardless of severity.
 
 ## 16. Stop-and-Report Rule
 
@@ -233,14 +244,11 @@ After completing one task, stop. Do not start the next task automatically. Selec
 
 Before stopping, report:
 
-- the selected task and why it was selected;
-- the model used and why;
-- whether subagents were used;
+- the task worked on and what was implemented;
 - the files changed;
-- what was implemented;
 - the tests executed and their results;
-- unverified items, constraints, and remaining work;
-- whether the pre-implementation check and post-implementation review in Section 15 were performed, and their results;
+- unverified items and remaining work;
+- for major changes, the Section 15 check and review results;
 - a recommended commit message.
 
 Do not commit or push; wait for human confirmation, per Section 10.
@@ -250,67 +258,29 @@ Do not commit or push; wait for human confirmation, per Section 10.
 AI agents must follow this lifecycle for every implementation task:
 
 ```text
-To Do → Decision approved → In Progress → Review → Done
+To Do → In Progress (after plan approval) → Done
 ```
 
-- Human approval of the implementation Decision is required before implementation starts.
-- Every Acceptance Criterion must be checked (`[x]`) before a task is changed to Done.
-- Status and Acceptance Criteria must describe the same completion state.
-
-### Ownership
-
-- Assignee is optional while a task is To Do or Decision approved.
+- Human approval of the implementation plan (Section 4) is required before implementation starts; record the approval in the task in one line.
 - An Assignee is required when implementation starts.
-- The Assignee records the implementation owner or implementation agent.
-
-### Completion Checklist
-
-A task may be marked Done only when all of the following are true:
-
-- Implementation completed
-- Tests passed
-- Required verification passed
-- Independent review completed
-- Review summary recorded
-- All Acceptance Criteria checked
-- Implementation Notes updated
-- Final Summary recorded
-- Status updated to Done
-- No unapproved scope remains
-
-## Task Lifecycle Workflow
-
-After implementation, agents follow this workflow for the current task only:
-
-```text
-Verification → Independent Review → Review Ready → Finalization → Task Commit → Push Confirmation
-```
-
-- When Independent Review is `Review Ready`, meaning no unresolved Critical or
-  Major finding and no missing human decision remains, proceed automatically to
-  Backlog Finalization for the same task.
-- Critical or Major findings require an immediate stop and human decision.
-- Minor findings require a proposed fix or deferral and the human's adopt,
-  defer, or reject decision before any follow-up change.
-- Suggestions are recorded as future improvement candidates and do not block
-  Finalization unless a human decision is still required.
-- A commit must contain changes for one task only. Never mix unrelated changes
-  into a task commit; inspect the staged file list and cached diff first.
-- Before push, confirm the commit hash, commit scope, task status, and that no
-  unrelated changes are included.
-- Commit and push remain explicitly authorized operations under Section 10.
-- Destructive operations, including history rewriting, force-push, deletion, or
-  privacy cleanup, require separate human approval and an approved task.
+- A task may be marked Done only when: the approved scope is fully implemented,
+  tests pass, every Acceptance Criterion is checked (`[x]`), a short
+  implementation note and final summary are recorded, and no unapproved scope
+  remains. For major changes, the Section 15 review must also be complete with
+  no unresolved Critical or Major finding.
+- A commit must contain changes for one task only; inspect the staged diff
+  first. Commit and push remain explicitly authorized operations under
+  Section 10. Destructive operations, including history rewriting, force-push,
+  deletion, or privacy cleanup, require separate human approval and an
+  approved task.
 
 ## 18. Autonomous Workflow Enforcement
 
-- An agent must not implement a task unless its dependencies are complete and its approved Decision is recorded in Backlog.
+- An agent must not implement a task unless its dependencies are complete and its plan is approved.
 - When multiple tasks are executable, select the highest-priority task; use ordinal order as the tie-breaker.
 - An agent must stop when no executable task exists, when an approval decision is unresolved, or when the approved scope cannot be maintained.
-- Public CLI/API contracts, security boundaries, dependency direction, external dependencies, and roadmap or milestone changes require human approval before implementation.
-- A task must not be marked Done with unchecked Acceptance Criteria, missing Verification, missing Independent Review, missing Final Summary, or unresolved Critical/Major findings.
-- Minor findings must be fixed or explicitly recorded as deferred; Suggestions must be recorded when they affect future work.
-- Model selection and its rationale must be recorded in the task's Implementation Notes.
+- Major changes (Section 15) require human approval before implementation.
+- A task must not be marked Done with unchecked Acceptance Criteria, failing or unrun tests, or unresolved Critical/Major findings.
 
 <!-- BACKLOG.MD GUIDELINES START -->
 <CRITICAL_INSTRUCTION>
