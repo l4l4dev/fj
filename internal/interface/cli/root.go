@@ -51,6 +51,7 @@ type RepositoryDependencies struct {
 	PullRequests               applicationpullrequest.PullRequestLister
 	PullRequestInspector       applicationpullrequest.PullRequestInspector
 	PullRequestCreator         applicationpullrequest.PullRequestCreator
+	PullRequestUpdater         applicationpullrequest.Updater
 	PullRequestStatusViewer    applicationpullrequest.StatusViewer
 	PullRequestReviewSubmitter applicationpullrequest.ReviewSubmitter
 }
@@ -72,7 +73,7 @@ func newRootCommand(dependencies RepositoryDependencies, version string) *cobra.
 	command.AddCommand(newVersionCommand(version))
 	command.AddCommand(newRepositoryCommand(dependencies))
 	command.AddCommand(newIssueCommand(dependencies.Issues, dependencies.IssueInspector, dependencies.IssueCreator, dependencies.IssueUpdater, dependencies.IssueStateChanger, dependencies.CommentViewer, dependencies.CommentCreator, dependencies.LabelAdder, dependencies.LabelRemover, dependencies.MilestoneSetter, dependencies.MilestoneClearer, dependencies.Assigner, dependencies.Unassigner))
-	command.AddCommand(newPullRequestCommandWithDependencies(dependencies.PullRequests, dependencies.PullRequestInspector, dependencies.PullRequestCreator, dependencies.PullRequestStatusViewer, dependencies.PullRequestReviewSubmitter))
+	command.AddCommand(newPullRequestCommand(pullRequestDependencies{lister: dependencies.PullRequests, inspector: dependencies.PullRequestInspector, creator: dependencies.PullRequestCreator, updater: dependencies.PullRequestUpdater, statusViewer: dependencies.PullRequestStatusViewer, reviewSubmitter: dependencies.PullRequestReviewSubmitter}))
 	command.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return newCommandError(categoryValidation, "execute command", err)
 	})
@@ -120,7 +121,7 @@ func composeRepositoryDependencies(ctx context.Context, instanceName string) (Re
 	adapter := infrastructurerepository.NewRESTAdapter(forgejo.NewClient(instance, credential, version, nil))
 	issueAdapter := infrastructureissue.NewRESTAdapter(forgejo.NewClient(instance, credential, version, nil))
 	pullRequestAdapter := infrastructurerpullrequest.NewRESTAdapter(forgejo.NewClient(instance, credential, version, nil))
-	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter, Issues: issueAdapter, IssueInspector: issueAdapter, IssueCreator: issueAdapter, IssueUpdater: issueAdapter, IssueStateChanger: issueAdapter, CommentViewer: issueAdapter, CommentCreator: issueAdapter, LabelAdder: issueAdapter, LabelRemover: issueAdapter, MilestoneSetter: issueAdapter, MilestoneClearer: issueAdapter, Assigner: issueAdapter, Unassigner: issueAdapter, PullRequests: pullRequestAdapter, PullRequestInspector: pullRequestAdapter, PullRequestCreator: pullRequestAdapter, PullRequestStatusViewer: pullRequestAdapter, PullRequestReviewSubmitter: pullRequestAdapter}, nil
+	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter, Issues: issueAdapter, IssueInspector: issueAdapter, IssueCreator: issueAdapter, IssueUpdater: issueAdapter, IssueStateChanger: issueAdapter, CommentViewer: issueAdapter, CommentCreator: issueAdapter, LabelAdder: issueAdapter, LabelRemover: issueAdapter, MilestoneSetter: issueAdapter, MilestoneClearer: issueAdapter, Assigner: issueAdapter, Unassigner: issueAdapter, PullRequests: pullRequestAdapter, PullRequestInspector: pullRequestAdapter, PullRequestCreator: pullRequestAdapter, PullRequestUpdater: pullRequestAdapter, PullRequestStatusViewer: pullRequestAdapter, PullRequestReviewSubmitter: pullRequestAdapter}, nil
 }
 
 func versionFromContext(ctx context.Context) string {

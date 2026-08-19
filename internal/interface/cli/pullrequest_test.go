@@ -143,3 +143,49 @@ func TestPullRequestReviewRejectsInvalidInput(t *testing.T) {
 		}
 	}
 }
+
+type pullRequestUpdaterStub struct {
+	request applicationpullrequest.UpdateRequest
+	detail  applicationpullrequest.PullRequestDetail
+}
+
+func (stub *pullRequestUpdaterStub) Update(_ context.Context, request applicationpullrequest.UpdateRequest) (applicationpullrequest.PullRequestDetail, error) {
+	stub.request = request
+	if stub.detail.Number == 0 {
+		stub.detail.Number = request.Number
+	}
+	return stub.detail, nil
+}
+
+func TestPullRequestUpdateSendsOnlyChangedFields(t *testing.T) {
+	updater := &pullRequestUpdaterStub{}
+	command := newPullRequestUpdateCommand(updater)
+	command.SetArgs([]string{"alice/project", "12", "--title", "New title"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if updater.request.Title == nil || *updater.request.Title != "New title" || updater.request.Body != nil {
+		t.Fatalf("unexpected request: %+v", updater.request)
+	}
+	if output.String() != "Pull request updated: #12\nChanged fields: title\n" {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+}
+
+func TestPullRequestUpdateRejectsInvalidInput(t *testing.T) {
+	tests := [][]string{
+		{"alice/project"},
+		{"invalid", "12", "--title", "New"},
+		{"alice/project", "0", "--title", "New"},
+		{"alice/project", "12"},
+	}
+	for _, args := range tests {
+		command := newPullRequestUpdateCommand(&pullRequestUpdaterStub{})
+		command.SetArgs(args)
+		if err := command.Execute(); err == nil {
+			t.Fatalf("expected validation error for %v", args)
+		}
+	}
+}

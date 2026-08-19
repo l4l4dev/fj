@@ -218,6 +218,35 @@ func (a *RESTAdapter) Create(ctx context.Context, request applicationpullrequest
 	return applicationpullrequest.PullRequestDetail{Number: decoded.Number, Title: decoded.Title, State: applicationpullrequest.State(decoded.State), HeadBranch: decoded.Head.Ref, BaseBranch: decoded.Base.Ref}, nil
 }
 
+func (a *RESTAdapter) Update(ctx context.Context, request applicationpullrequest.UpdateRequest) (applicationpullrequest.PullRequestDetail, error) {
+	jsonClient, ok := a.transport.(jsonTransport)
+	if !ok {
+		return applicationpullrequest.PullRequestDetail{}, apperror.New(apperror.Remote, "update pull request", "")
+	}
+	payload := make(map[string]string)
+	if request.Title != nil {
+		payload["title"] = *request.Title
+	}
+	if request.Body != nil {
+		payload["body"] = *request.Body
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return applicationpullrequest.PullRequestDetail{}, apperror.New(apperror.Remote, "update pull request", "")
+	}
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/pulls/" + strconv.Itoa(request.Number)
+	response, err := jsonClient.DoJSON(ctx, http.MethodPatch, path, nil, body)
+	if err != nil {
+		return applicationpullrequest.PullRequestDetail{}, translateUpdateError(err)
+	}
+	defer response.Body.Close()
+	var decoded forgejoPullRequestDetail
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationpullrequest.PullRequestDetail{}, apperror.New(apperror.Remote, "update pull request", "")
+	}
+	return applicationpullrequest.PullRequestDetail{Number: decoded.Number, Title: decoded.Title, State: applicationpullrequest.State(decoded.State), HeadBranch: decoded.Head.Ref, BaseBranch: decoded.Base.Ref, Body: decoded.Body}, nil
+}
+
 func (a *RESTAdapter) List(ctx context.Context, request applicationpullrequest.ListRequest) ([]applicationpullrequest.PullRequest, error) {
 	query := url.Values{}
 	query.Set("page", strconv.Itoa(request.Page))
@@ -300,6 +329,21 @@ func translateCreateError(err error) error {
 	return apperror.New(apperror.Remote, "create pull request", "")
 }
 
+func translateUpdateError(err error) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		switch status.StatusCode() {
+		case 401, 403:
+			return apperror.New(apperror.Authentication, "update pull request", "permission denied or authentication failed")
+		case 404:
+			return apperror.New(apperror.NotFound, "update pull request", "pull request not found")
+		case 409, 422:
+			return apperror.New(apperror.Validation, "update pull request", "pull request fields were rejected by the remote service")
+		}
+	}
+	return apperror.New(apperror.Remote, "update pull request", "")
+}
+
 func translateStatusError(err error) error {
 	var status interface{ StatusCode() int }
 	if errors.As(err, &status) {
@@ -333,5 +377,6 @@ func translateSubmitReviewError(err error) error {
 var _ applicationpullrequest.PullRequestLister = (*RESTAdapter)(nil)
 var _ applicationpullrequest.PullRequestInspector = (*RESTAdapter)(nil)
 var _ applicationpullrequest.PullRequestCreator = (*RESTAdapter)(nil)
+var _ applicationpullrequest.Updater = (*RESTAdapter)(nil)
 var _ applicationpullrequest.StatusViewer = (*RESTAdapter)(nil)
 var _ applicationpullrequest.ReviewSubmitter = (*RESTAdapter)(nil)

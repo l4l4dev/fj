@@ -9,21 +9,78 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newPullRequestCommand(lister applicationpullrequest.PullRequestLister) *cobra.Command {
-	return newPullRequestCommandWithInspector(lister, nil)
+type pullRequestDependencies struct {
+	lister          applicationpullrequest.PullRequestLister
+	inspector       applicationpullrequest.PullRequestInspector
+	creator         applicationpullrequest.PullRequestCreator
+	updater         applicationpullrequest.Updater
+	statusViewer    applicationpullrequest.StatusViewer
+	reviewSubmitter applicationpullrequest.ReviewSubmitter
 }
 
-func newPullRequestCommandWithInspector(lister applicationpullrequest.PullRequestLister, inspector applicationpullrequest.PullRequestInspector) *cobra.Command {
-	return newPullRequestCommandWithDependencies(lister, inspector, nil, nil, nil)
-}
-
-func newPullRequestCommandWithDependencies(lister applicationpullrequest.PullRequestLister, inspector applicationpullrequest.PullRequestInspector, creator applicationpullrequest.PullRequestCreator, statusViewer applicationpullrequest.StatusViewer, reviewSubmitter applicationpullrequest.ReviewSubmitter) *cobra.Command {
+func newPullRequestCommand(dependencies pullRequestDependencies) *cobra.Command {
 	command := &cobra.Command{Use: "pr", Short: "Manage pull requests"}
-	command.AddCommand(newPullRequestListCommand(lister))
-	command.AddCommand(newPullRequestInspectCommand(inspector))
-	command.AddCommand(newPullRequestCreateCommand(creator))
-	command.AddCommand(newPullRequestStatusCommand(statusViewer))
-	command.AddCommand(newPullRequestReviewCommand(reviewSubmitter))
+	command.AddCommand(newPullRequestListCommand(dependencies.lister))
+	command.AddCommand(newPullRequestInspectCommand(dependencies.inspector))
+	command.AddCommand(newPullRequestCreateCommand(dependencies.creator))
+	command.AddCommand(newPullRequestUpdateCommand(dependencies.updater))
+	command.AddCommand(newPullRequestStatusCommand(dependencies.statusViewer))
+	command.AddCommand(newPullRequestReviewCommand(dependencies.reviewSubmitter))
+	return command
+}
+
+func newPullRequestUpdateCommand(updater applicationpullrequest.Updater) *cobra.Command {
+	var instance, title, body string
+	var titleSet, bodySet bool
+	command := &cobra.Command{Use: "update OWNER/NAME NUMBER", Short: "Update a pull request", Args: func(command *cobra.Command, args []string) error {
+		titleSet = command.Flags().Changed("title")
+		bodySet = command.Flags().Changed("body")
+		if len(args) != 2 {
+			return newCommandError(categoryValidation, "update pull request", fmt.Errorf("OWNER/NAME and pull request number are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "update pull request", err)
+		}
+		number, err := strconv.Atoi(args[1])
+		if err != nil || number < 1 {
+			return newCommandError(categoryValidation, "update pull request", fmt.Errorf("pull request number must be a positive integer"))
+		}
+		if !titleSet && !bodySet {
+			return newCommandError(categoryValidation, "update pull request", fmt.Errorf("at least one pull request field is required"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if updater == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			updater = dependencies.PullRequestUpdater
+			if updater == nil {
+				return newCommandError(categoryInternal, "update pull request", fmt.Errorf("pull request updater unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		request := applicationpullrequest.UpdateRequest{Owner: parts[0], Name: parts[1], Number: number}
+		fields := make([]string, 0, 2)
+		if titleSet {
+			request.Title = &title
+			fields = append(fields, "title")
+		}
+		if bodySet {
+			request.Body = &body
+			fields = append(fields, "body")
+		}
+		result, err := applicationpullrequest.NewUpdateUseCase(updater).Execute(command.Context(), request)
+		if err != nil {
+			return mapApplicationError(err, "update pull request")
+		}
+		return (pullRequestPresenter{}).PresentUpdated(command.OutOrStdout(), result, fields)
+	}}
+	command.Flags().StringVar(&title, "title", "", "pull request title")
+	command.Flags().StringVar(&body, "body", "", "pull request body")
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 

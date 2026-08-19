@@ -61,6 +61,18 @@ type PullRequestCreator interface {
 	Create(context.Context, CreateRequest) (PullRequestDetail, error)
 }
 
+type UpdateRequest struct {
+	Owner  string
+	Name   string
+	Number int
+	Title  *string
+	Body   *string
+}
+
+type Updater interface {
+	Update(context.Context, UpdateRequest) (PullRequestDetail, error)
+}
+
 type AggregateState string
 
 const (

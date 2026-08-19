@@ -168,3 +168,41 @@ func TestRESTAdapterSubmitReviewMapsHTTPError(t *testing.T) {
 		}
 	}
 }
+
+func TestRESTAdapterUpdateSendsOnlySuppliedFields(t *testing.T) {
+	title := "New title"
+	stub := &jsonStubTransport{response: `{"number":12,"title":"New title","state":"open","body":"Same","head":{"ref":"feature"},"base":{"ref":"main"}}`}
+	result, err := NewRESTAdapter(stub).Update(context.Background(), applicationpullrequest.UpdateRequest{Owner: "alice", Name: "project", Number: 12, Title: &title})
+	if err != nil || result.Number != 12 || result.Title != "New title" {
+		t.Fatalf("unexpected result: %+v err=%v", result, err)
+	}
+	if stub.method != http.MethodPatch || stub.path != "/api/v1/repos/alice/project/pulls/12" {
+		t.Fatalf("unexpected request: %s %s", stub.method, stub.path)
+	}
+	if string(stub.body) != `{"title":"New title"}` {
+		t.Fatalf("unexpected payload: %s", stub.body)
+	}
+}
+
+func TestRESTAdapterUpdateMapsHTTPError(t *testing.T) {
+	tests := []struct {
+		status   int
+		category apperror.Category
+	}{
+		{401, apperror.Authentication},
+		{403, apperror.Authentication},
+		{404, apperror.NotFound},
+		{409, apperror.Validation},
+		{422, apperror.Validation},
+		{500, apperror.Remote},
+	}
+	title := "New title"
+	for _, test := range tests {
+		stub := &jsonStubTransport{err: statusError(test.status)}
+		_, err := NewRESTAdapter(stub).Update(context.Background(), applicationpullrequest.UpdateRequest{Owner: "alice", Name: "project", Number: 12, Title: &title})
+		var appErr apperror.Error
+		if !errors.As(err, &appErr) || appErr.Category != test.category {
+			t.Fatalf("status %d: unexpected error %v", test.status, err)
+		}
+	}
+}

@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	applicationpullrequest "github.com/l4l4dev/fj/internal/application/pullrequest"
 )
@@ -11,6 +12,11 @@ type pullRequestPresenter struct{}
 
 func (pullRequestPresenter) PresentSubmittedReview(w io.Writer, review applicationpullrequest.SubmittedReview) error {
 	_, err := fmt.Fprintf(w, "Review submitted: %s\n", review.State)
+	return err
+}
+
+func (pullRequestPresenter) PresentUpdated(w io.Writer, detail applicationpullrequest.PullRequestDetail, fields []string) error {
+	_, err := fmt.Fprintf(w, "Pull request updated: #%d\nChanged fields: %s\n", detail.Number, strings.Join(fields, ", "))
 	return err
 }
 
