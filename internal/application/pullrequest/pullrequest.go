@@ -112,3 +112,43 @@ type StatusData struct {
 type StatusViewer interface {
 	ViewStatus(context.Context, StatusRequest) (StatusData, error)
 }
+
+type ReviewOutcome string
+
+const (
+	ReviewOutcomeComment        ReviewOutcome = "comment"
+	ReviewOutcomeApprove        ReviewOutcome = "approve"
+	ReviewOutcomeRequestChanges ReviewOutcome = "request-changes"
+)
+
+type ReviewEvent string
+
+const (
+	ReviewEventComment        ReviewEvent = "COMMENT"
+	ReviewEventApprove        ReviewEvent = "APPROVE"
+	ReviewEventRequestChanges ReviewEvent = "REQUEST_CHANGES"
+)
+
+type SubmitReviewRequest struct {
+	Owner   string
+	Name    string
+	Number  int
+	Outcome ReviewOutcome
+	Body    string
+}
+
+type ReviewSubmission struct {
+	Owner  string
+	Name   string
+	Number int
+	Event  ReviewEvent
+	Body   string
+}
+
+type SubmittedReview struct {
+	State string
+}
+
+type ReviewSubmitter interface {
+	SubmitReview(context.Context, ReviewSubmission) (SubmittedReview, error)
+}

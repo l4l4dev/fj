@@ -31,10 +31,11 @@ func (transport errorTransport) Do(context.Context, string, string, url.Values) 
 }
 
 type jsonStubTransport struct {
-	method string
-	path   string
-	body   []byte
-	err    error
+	method   string
+	path     string
+	body     []byte
+	err      error
+	response string
 }
 
 func (stub *jsonStubTransport) Do(context.Context, string, string, url.Values) (*http.Response, error) {
@@ -46,7 +47,10 @@ func (stub *jsonStubTransport) DoJSON(_ context.Context, method, path string, _ 
 	if stub.err != nil {
 		return nil, stub.err
 	}
-	response := `{"number":7,"title":"Improve flow","state":"open","head":{"ref":"feature"},"base":{"ref":"main"}}`
+	response := stub.response
+	if response == "" {
+		response = `{"number":7,"title":"Improve flow","state":"open","head":{"ref":"feature"},"base":{"ref":"main"}}`
+	}
 	return &http.Response{StatusCode: http.StatusCreated, Body: io.NopCloser(strings.NewReader(response))}, nil
 }
 
@@ -121,5 +125,46 @@ func TestRESTAdapterCreateMapsNotFoundWithoutMisdiagnosingTarget(t *testing.T) {
 	var appErr apperror.Error
 	if !errors.As(err, &appErr) || appErr.Category != apperror.NotFound || appErr.Message != "repository or branch not found" {
 		t.Fatalf("unexpected error: %#v", err)
+	}
+}
+
+func TestRESTAdapterSubmitReviewPayload(t *testing.T) {
+	transport := &jsonStubTransport{response: `{"id":42,"state":"APPROVED","body":"not printed"}`}
+	result, err := NewRESTAdapter(transport).SubmitReview(context.Background(), applicationpullrequest.ReviewSubmission{Owner: "alice", Name: "project", Number: 12, Event: applicationpullrequest.ReviewEventApprove})
+	if err != nil || result.State != "APPROVED" {
+		t.Fatalf("unexpected result: %+v err=%v", result, err)
+	}
+	if transport.method != http.MethodPost || transport.path != "/api/v1/repos/alice/project/pulls/12/reviews" {
+		t.Fatalf("unexpected request: method=%s path=%s", transport.method, transport.path)
+	}
+	if string(transport.body) != `{"event":"APPROVE"}` {
+		t.Fatalf("unexpected body: %s", transport.body)
+	}
+
+	transport = &jsonStubTransport{response: `{"state":"REQUEST_CHANGES"}`}
+	_, err = NewRESTAdapter(transport).SubmitReview(context.Background(), applicationpullrequest.ReviewSubmission{Owner: "alice", Name: "project", Number: 12, Event: applicationpullrequest.ReviewEventRequestChanges, Body: "Please add a test"})
+	if err != nil || string(transport.body) != `{"event":"REQUEST_CHANGES","body":"Please add a test"}` {
+		t.Fatalf("unexpected body submission: body=%s err=%v", transport.body, err)
+	}
+}
+
+func TestRESTAdapterSubmitReviewMapsHTTPError(t *testing.T) {
+	tests := []struct {
+		status   int
+		category apperror.Category
+	}{
+		{status: http.StatusUnauthorized, category: apperror.Authentication},
+		{status: http.StatusForbidden, category: apperror.Authentication},
+		{status: http.StatusNotFound, category: apperror.NotFound},
+		{status: http.StatusConflict, category: apperror.Conflict},
+		{status: http.StatusUnprocessableEntity, category: apperror.Validation},
+		{status: http.StatusInternalServerError, category: apperror.Remote},
+	}
+	for _, test := range tests {
+		_, err := NewRESTAdapter(&jsonStubTransport{err: statusError(test.status)}).SubmitReview(context.Background(), applicationpullrequest.ReviewSubmission{})
+		var appErr apperror.Error
+		if !errors.As(err, &appErr) || appErr.Category != test.category {
+			t.Fatalf("status %d: error=%#v, want category %v", test.status, err, test.category)
+		}
 	}
 }

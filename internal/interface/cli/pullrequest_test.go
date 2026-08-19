@@ -16,6 +16,15 @@ type pullRequestCreatorStub struct {
 	request applicationpullrequest.CreateRequest
 }
 
+type pullRequestReviewSubmitterStub struct {
+	submission applicationpullrequest.ReviewSubmission
+}
+
+func (stub *pullRequestReviewSubmitterStub) SubmitReview(_ context.Context, submission applicationpullrequest.ReviewSubmission) (applicationpullrequest.SubmittedReview, error) {
+	stub.submission = submission
+	return applicationpullrequest.SubmittedReview{State: "APPROVED"}, nil
+}
+
 func (stub *pullRequestCreatorStub) Create(_ context.Context, request applicationpullrequest.CreateRequest) (applicationpullrequest.PullRequestDetail, error) {
 	stub.request = request
 	return applicationpullrequest.PullRequestDetail{Number: 7, Title: request.Title, HeadBranch: request.HeadBranch, BaseBranch: request.BaseBranch}, nil
@@ -91,6 +100,43 @@ func TestPullRequestCreateRejectsInvalidInput(t *testing.T) {
 	}
 	for _, args := range tests {
 		command := newPullRequestCreateCommand(&pullRequestCreatorStub{})
+		command.SetArgs(args)
+		if err := command.Execute(); err == nil {
+			t.Fatalf("expected validation error for %v", args)
+		}
+	}
+}
+
+func TestPullRequestReviewOutputAndRequest(t *testing.T) {
+	submitter := &pullRequestReviewSubmitterStub{}
+	command := newPullRequestReviewCommand(submitter)
+	command.SetArgs([]string{"alice/project", "12", "--outcome", "approve", "--body", "Looks good"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if output.String() != "Review submitted: APPROVED\n" {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+	if submitter.submission.Owner != "alice" || submitter.submission.Name != "project" || submitter.submission.Number != 12 || submitter.submission.Event != applicationpullrequest.ReviewEventApprove || submitter.submission.Body != "Looks good" {
+		t.Fatalf("unexpected submission: %+v", submitter.submission)
+	}
+}
+
+func TestPullRequestReviewRejectsInvalidInput(t *testing.T) {
+	tests := [][]string{
+		{"alice/project"},
+		{"invalid", "12", "--outcome", "approve"},
+		{"alice/project", "0", "--outcome", "approve"},
+		{"alice/project", "not-a-number", "--outcome", "approve"},
+		{"alice/project", "12"},
+		{"alice/project", "12", "--outcome", "approved"},
+		{"alice/project", "12", "--outcome", "comment"},
+		{"alice/project", "12", "--outcome", "request-changes", "--body", "  "},
+	}
+	for _, args := range tests {
+		command := newPullRequestReviewCommand(&pullRequestReviewSubmitterStub{})
 		command.SetArgs(args)
 		if err := command.Execute(); err == nil {
 			t.Fatalf("expected validation error for %v", args)

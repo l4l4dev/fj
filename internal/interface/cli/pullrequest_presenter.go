@@ -9,6 +9,11 @@ import (
 
 type pullRequestPresenter struct{}
 
+func (pullRequestPresenter) PresentSubmittedReview(w io.Writer, review applicationpullrequest.SubmittedReview) error {
+	_, err := fmt.Fprintf(w, "Review submitted: %s\n", review.State)
+	return err
+}
+
 func (pullRequestPresenter) PresentStatus(w io.Writer, status applicationpullrequest.PullRequestStatus) error {
 	_, err := fmt.Fprintf(w, "Pull request: #%d\nReview: %s\nChecks: %s\nMergeable: %s\n", status.Number, status.Review, status.Check, status.Mergeable)
 	return err

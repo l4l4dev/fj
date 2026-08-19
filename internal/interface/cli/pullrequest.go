@@ -14,15 +14,55 @@ func newPullRequestCommand(lister applicationpullrequest.PullRequestLister) *cob
 }
 
 func newPullRequestCommandWithInspector(lister applicationpullrequest.PullRequestLister, inspector applicationpullrequest.PullRequestInspector) *cobra.Command {
-	return newPullRequestCommandWithDependencies(lister, inspector, nil, nil)
+	return newPullRequestCommandWithDependencies(lister, inspector, nil, nil, nil)
 }
 
-func newPullRequestCommandWithDependencies(lister applicationpullrequest.PullRequestLister, inspector applicationpullrequest.PullRequestInspector, creator applicationpullrequest.PullRequestCreator, statusViewer applicationpullrequest.StatusViewer) *cobra.Command {
+func newPullRequestCommandWithDependencies(lister applicationpullrequest.PullRequestLister, inspector applicationpullrequest.PullRequestInspector, creator applicationpullrequest.PullRequestCreator, statusViewer applicationpullrequest.StatusViewer, reviewSubmitter applicationpullrequest.ReviewSubmitter) *cobra.Command {
 	command := &cobra.Command{Use: "pr", Short: "Manage pull requests"}
 	command.AddCommand(newPullRequestListCommand(lister))
 	command.AddCommand(newPullRequestInspectCommand(inspector))
 	command.AddCommand(newPullRequestCreateCommand(creator))
 	command.AddCommand(newPullRequestStatusCommand(statusViewer))
+	command.AddCommand(newPullRequestReviewCommand(reviewSubmitter))
+	return command
+}
+
+func newPullRequestReviewCommand(submitter applicationpullrequest.ReviewSubmitter) *cobra.Command {
+	var instance, outcome, body string
+	command := &cobra.Command{Use: "review OWNER/NAME NUMBER", Short: "Submit a pull request review", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 2 {
+			return newCommandError(categoryValidation, "submit pull request review", fmt.Errorf("OWNER/NAME and pull request number are required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "submit pull request review", err)
+		}
+		number, err := strconv.Atoi(args[1])
+		if err != nil || number < 1 {
+			return newCommandError(categoryValidation, "submit pull request review", fmt.Errorf("pull request number must be a positive integer"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if submitter == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			submitter = dependencies.PullRequestReviewSubmitter
+			if submitter == nil {
+				return newCommandError(categoryInternal, "submit pull request review", fmt.Errorf("pull request review submitter unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		number, _ := strconv.Atoi(args[1])
+		result, err := applicationpullrequest.NewSubmitReviewUseCase(submitter).Execute(command.Context(), applicationpullrequest.SubmitReviewRequest{Owner: parts[0], Name: parts[1], Number: number, Outcome: applicationpullrequest.ReviewOutcome(outcome), Body: body})
+		if err != nil {
+			return mapApplicationError(err, "submit pull request review")
+		}
+		return (pullRequestPresenter{}).PresentSubmittedReview(command.OutOrStdout(), result)
+	}}
+	command.Flags().StringVar(&outcome, "outcome", "", "review outcome (comment, approve, or request-changes)")
+	command.Flags().StringVar(&body, "body", "", "review body")
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }
 

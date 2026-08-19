@@ -69,6 +69,31 @@ type forgejoCombinedStatus struct {
 
 func NewRESTAdapter(t transport) *RESTAdapter { return &RESTAdapter{transport: t} }
 
+func (a *RESTAdapter) SubmitReview(ctx context.Context, submission applicationpullrequest.ReviewSubmission) (applicationpullrequest.SubmittedReview, error) {
+	jsonClient, ok := a.transport.(jsonTransport)
+	if !ok {
+		return applicationpullrequest.SubmittedReview{}, apperror.New(apperror.Remote, "submit pull request review", "")
+	}
+	body, err := json.Marshal(struct {
+		Event applicationpullrequest.ReviewEvent `json:"event"`
+		Body  string                             `json:"body,omitempty"`
+	}{Event: submission.Event, Body: submission.Body})
+	if err != nil {
+		return applicationpullrequest.SubmittedReview{}, apperror.New(apperror.Remote, "submit pull request review", "")
+	}
+	path := "/api/v1/repos/" + url.PathEscape(submission.Owner) + "/" + url.PathEscape(submission.Name) + "/pulls/" + strconv.Itoa(submission.Number) + "/reviews"
+	response, err := jsonClient.DoJSON(ctx, http.MethodPost, path, nil, body)
+	if err != nil {
+		return applicationpullrequest.SubmittedReview{}, translateSubmitReviewError(err)
+	}
+	defer response.Body.Close()
+	var decoded forgejoPullReview
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationpullrequest.SubmittedReview{}, apperror.New(apperror.Remote, "submit pull request review", "")
+	}
+	return applicationpullrequest.SubmittedReview{State: decoded.State}, nil
+}
+
 func (a *RESTAdapter) ViewStatus(ctx context.Context, request applicationpullrequest.StatusRequest) (applicationpullrequest.StatusData, error) {
 	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/pulls/" + strconv.Itoa(request.Number)
 	response, err := a.transport.Do(ctx, http.MethodGet, path, nil)
@@ -288,7 +313,25 @@ func translateStatusError(err error) error {
 	return apperror.New(apperror.Remote, "view pull request status", "")
 }
 
+func translateSubmitReviewError(err error) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		switch status.StatusCode() {
+		case 401, 403:
+			return apperror.New(apperror.Authentication, "submit pull request review", "permission denied or authentication failed")
+		case 404:
+			return apperror.New(apperror.NotFound, "submit pull request review", "pull request not found")
+		case 409:
+			return apperror.New(apperror.Conflict, "submit pull request review", "review could not be submitted in the pull request's current state")
+		case 422:
+			return apperror.New(apperror.Validation, "submit pull request review", "review outcome or body was rejected by the remote service")
+		}
+	}
+	return apperror.New(apperror.Remote, "submit pull request review", "")
+}
+
 var _ applicationpullrequest.PullRequestLister = (*RESTAdapter)(nil)
 var _ applicationpullrequest.PullRequestInspector = (*RESTAdapter)(nil)
 var _ applicationpullrequest.PullRequestCreator = (*RESTAdapter)(nil)
 var _ applicationpullrequest.StatusViewer = (*RESTAdapter)(nil)
+var _ applicationpullrequest.ReviewSubmitter = (*RESTAdapter)(nil)
