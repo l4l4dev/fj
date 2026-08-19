@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/l4l4dev/fj/internal/application/apperror"
 )
 
 func TestRootCommandDisplaysHelp(t *testing.T) {
@@ -51,5 +53,18 @@ func TestRootCommandRejectsInvalidInput(t *testing.T) {
 				t.Errorf("standard error = %q", got)
 			}
 		})
+	}
+}
+
+func TestMapApplicationErrorSurfacesValidationMessage(t *testing.T) {
+	err := mapApplicationError(apperror.NewValidation("submit pull request review", "outcome must be comment, approve, or request-changes"), "submit pull request review")
+	want := "submit pull request review: outcome must be comment, approve, or request-changes"
+	if err == nil || err.Error() != want {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	fallback := mapApplicationError(apperror.ValidationError{Operation: "submit pull request review"}, "submit pull request review")
+	if fallback == nil || fallback.Error() != "submit pull request review: invalid input" {
+		t.Fatalf("unexpected fallback error: %v", fallback)
 	}
 }

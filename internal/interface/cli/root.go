@@ -176,6 +176,9 @@ func mapApplicationError(err error, operation string) error {
 	}
 	var validation apperror.ValidationError
 	if errors.As(err, &validation) {
+		if validation.Message != "" {
+			return newCommandErrorWithMessage(categoryValidation, operation, validation.Message, err)
+		}
 		return newCommandError(categoryValidation, operation, err)
 	}
 	return newCommandError(categoryInternal, operation, err)
