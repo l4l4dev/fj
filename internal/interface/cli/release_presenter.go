@@ -59,3 +59,8 @@ func (releasePresenter) PresentInspect(w io.Writer, detail applicationrelease.Re
 	}
 	return nil
 }
+
+func (releasePresenter) PresentCreated(w io.Writer, detail applicationrelease.ReleaseDetail) error {
+	_, err := fmt.Fprintf(w, "Release created as draft: %s\nTitle: %s\nPrerelease: %t\n", detail.TagName, detail.Title, detail.Prerelease)
+	return err
+}

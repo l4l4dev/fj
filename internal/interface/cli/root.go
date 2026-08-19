@@ -62,6 +62,7 @@ type RepositoryDependencies struct {
 	PullRequestCloser          applicationpullrequest.Closer
 	Releases                   applicationrelease.Lister
 	ReleaseInspector           applicationrelease.Inspector
+	ReleaseCreator             applicationrelease.Creator
 }
 
 func NewRootCommandWithDependencies(dependencies RepositoryDependencies) *cobra.Command {
@@ -82,7 +83,7 @@ func newRootCommand(dependencies RepositoryDependencies, version string) *cobra.
 	command.AddCommand(newRepositoryCommand(dependencies))
 	command.AddCommand(newIssueCommand(dependencies.Issues, dependencies.IssueInspector, dependencies.IssueCreator, dependencies.IssueUpdater, dependencies.IssueStateChanger, dependencies.CommentViewer, dependencies.CommentCreator, dependencies.LabelAdder, dependencies.LabelRemover, dependencies.MilestoneSetter, dependencies.MilestoneClearer, dependencies.Assigner, dependencies.Unassigner))
 	command.AddCommand(newPullRequestCommand(pullRequestDependencies{lister: dependencies.PullRequests, inspector: dependencies.PullRequestInspector, creator: dependencies.PullRequestCreator, updater: dependencies.PullRequestUpdater, statusViewer: dependencies.PullRequestStatusViewer, reviewSubmitter: dependencies.PullRequestReviewSubmitter, commentViewer: dependencies.PullRequestCommentViewer, commentCreator: dependencies.PullRequestCommentCreator, merger: dependencies.PullRequestMerger, closer: dependencies.PullRequestCloser}))
-	command.AddCommand(newReleaseCommand(releaseDependencies{lister: dependencies.Releases, inspector: dependencies.ReleaseInspector}))
+	command.AddCommand(newReleaseCommand(releaseDependencies{lister: dependencies.Releases, inspector: dependencies.ReleaseInspector, creator: dependencies.ReleaseCreator}))
 	command.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return newCommandError(categoryValidation, "execute command", err)
 	})
@@ -131,7 +132,7 @@ func composeRepositoryDependencies(ctx context.Context, instanceName string) (Re
 	issueAdapter := infrastructureissue.NewRESTAdapter(forgejo.NewClient(instance, credential, version, nil))
 	pullRequestAdapter := infrastructurerpullrequest.NewRESTAdapter(forgejo.NewClient(instance, credential, version, nil))
 	releaseAdapter := infrastructurerelease.NewRESTAdapter(forgejo.NewClient(instance, credential, version, nil))
-	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter, Issues: issueAdapter, IssueInspector: issueAdapter, IssueCreator: issueAdapter, IssueUpdater: issueAdapter, IssueStateChanger: issueAdapter, CommentViewer: issueAdapter, CommentCreator: issueAdapter, LabelAdder: issueAdapter, LabelRemover: issueAdapter, MilestoneSetter: issueAdapter, MilestoneClearer: issueAdapter, Assigner: issueAdapter, Unassigner: issueAdapter, PullRequests: pullRequestAdapter, PullRequestInspector: pullRequestAdapter, PullRequestCreator: pullRequestAdapter, PullRequestUpdater: pullRequestAdapter, PullRequestStatusViewer: pullRequestAdapter, PullRequestReviewSubmitter: pullRequestAdapter, PullRequestCommentViewer: pullRequestAdapter, PullRequestCommentCreator: pullRequestAdapter, PullRequestMerger: pullRequestAdapter, PullRequestCloser: pullRequestAdapter, Releases: releaseAdapter, ReleaseInspector: releaseAdapter}, nil
+	return RepositoryDependencies{List: adapter, Inspect: adapter, Create: adapter, Update: adapter, Archive: adapter, Access: adapter, Issues: issueAdapter, IssueInspector: issueAdapter, IssueCreator: issueAdapter, IssueUpdater: issueAdapter, IssueStateChanger: issueAdapter, CommentViewer: issueAdapter, CommentCreator: issueAdapter, LabelAdder: issueAdapter, LabelRemover: issueAdapter, MilestoneSetter: issueAdapter, MilestoneClearer: issueAdapter, Assigner: issueAdapter, Unassigner: issueAdapter, PullRequests: pullRequestAdapter, PullRequestInspector: pullRequestAdapter, PullRequestCreator: pullRequestAdapter, PullRequestUpdater: pullRequestAdapter, PullRequestStatusViewer: pullRequestAdapter, PullRequestReviewSubmitter: pullRequestAdapter, PullRequestCommentViewer: pullRequestAdapter, PullRequestCommentCreator: pullRequestAdapter, PullRequestMerger: pullRequestAdapter, PullRequestCloser: pullRequestAdapter, Releases: releaseAdapter, ReleaseInspector: releaseAdapter, ReleaseCreator: releaseAdapter}, nil
 }
 
 func versionFromContext(ctx context.Context) string {

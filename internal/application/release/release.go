@@ -46,3 +46,16 @@ type InspectRequest struct {
 type Inspector interface {
 	Inspect(context.Context, InspectRequest) (ReleaseDetail, error)
 }
+
+type CreateRequest struct {
+	Owner      string
+	Name       string
+	Tag        string
+	Title      string
+	Notes      string
+	Prerelease bool
+}
+
+type Creator interface {
+	Create(context.Context, CreateRequest) (ReleaseDetail, error)
+}

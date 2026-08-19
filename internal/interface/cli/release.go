@@ -11,12 +11,14 @@ import (
 type releaseDependencies struct {
 	lister    applicationrelease.Lister
 	inspector applicationrelease.Inspector
+	creator   applicationrelease.Creator
 }
 
 func newReleaseCommand(dependencies releaseDependencies) *cobra.Command {
 	command := &cobra.Command{Use: "release", Short: "Manage releases"}
 	command.AddCommand(newReleaseListCommand(dependencies.lister))
 	command.AddCommand(newReleaseInspectCommand(dependencies.inspector))
+	command.AddCommand(newReleaseCreateCommand(dependencies.creator))
 	return command
 }
 
@@ -92,6 +94,52 @@ func newReleaseInspectCommand(inspector applicationrelease.Inspector) *cobra.Com
 		}
 		return (releasePresenter{}).PresentInspect(command.OutOrStdout(), result)
 	}}
+	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
+	return command
+}
+
+func newReleaseCreateCommand(creator applicationrelease.Creator) *cobra.Command {
+	var instance, tag, title, notes string
+	var prerelease bool
+	command := &cobra.Command{Use: "create OWNER/NAME", Short: "Create a draft release", Args: func(_ *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			return newCommandError(categoryValidation, "create release", fmt.Errorf("OWNER/NAME is required"))
+		}
+		if err := validateRepositoryTarget(args[0]); err != nil {
+			return newCommandError(categoryValidation, "create release", err)
+		}
+		if strings.TrimSpace(tag) == "" {
+			return newCommandError(categoryValidation, "create release", fmt.Errorf("release tag is required"))
+		}
+		if strings.ContainsAny(tag, " \t\n") {
+			return newCommandError(categoryValidation, "create release", fmt.Errorf("release tag must not contain whitespace"))
+		}
+		if strings.TrimSpace(title) == "" {
+			return newCommandError(categoryValidation, "create release", fmt.Errorf("release title is required"))
+		}
+		return nil
+	}, RunE: func(command *cobra.Command, args []string) error {
+		if creator == nil {
+			dependencies, err := composeRepositoryDependencies(command.Context(), instance)
+			if err != nil {
+				return err
+			}
+			creator = dependencies.ReleaseCreator
+			if creator == nil {
+				return newCommandError(categoryInternal, "create release", fmt.Errorf("release creator unavailable"))
+			}
+		}
+		parts := strings.SplitN(args[0], "/", 2)
+		result, err := applicationrelease.NewCreateUseCase(creator).Execute(command.Context(), applicationrelease.CreateRequest{Owner: parts[0], Name: parts[1], Tag: tag, Title: title, Notes: notes, Prerelease: prerelease})
+		if err != nil {
+			return mapApplicationError(err, "create release")
+		}
+		return (releasePresenter{}).PresentCreated(command.OutOrStdout(), result)
+	}}
+	command.Flags().StringVar(&tag, "tag", "", "release tag")
+	command.Flags().StringVar(&title, "title", "", "release title")
+	command.Flags().StringVar(&notes, "notes", "", "release notes")
+	command.Flags().BoolVar(&prerelease, "prerelease", false, "mark the release as a prerelease")
 	command.Flags().StringVar(&instance, "instance", "", "configured Forgejo instance profile")
 	return command
 }

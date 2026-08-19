@@ -35,6 +35,34 @@ func (transport errorTransport) Do(context.Context, string, string, url.Values) 
 	return nil, transport.err
 }
 
+func (transport errorTransport) DoJSON(context.Context, string, string, url.Values, []byte) (*http.Response, error) {
+	return nil, transport.err
+}
+
+type jsonStubTransport struct {
+	method   string
+	path     string
+	body     []byte
+	err      error
+	response string
+}
+
+func (stub *jsonStubTransport) Do(context.Context, string, string, url.Values) (*http.Response, error) {
+	return nil, errors.New("unexpected Do call")
+}
+
+func (stub *jsonStubTransport) DoJSON(_ context.Context, method, path string, _ url.Values, body []byte) (*http.Response, error) {
+	stub.method, stub.path, stub.body = method, path, body
+	if stub.err != nil {
+		return nil, stub.err
+	}
+	response := stub.response
+	if response == "" {
+		response = `{"id":1,"tag_name":"v1.0.0","name":"First release","draft":true,"prerelease":false}`
+	}
+	return &http.Response{StatusCode: http.StatusCreated, Body: io.NopCloser(strings.NewReader(response))}, nil
+}
+
 func TestRESTAdapterList(t *testing.T) {
 	transport := &stubTransport{body: `[{"id":1,"tag_name":"v1.0.0","name":"First release","draft":false,"prerelease":false},{"id":2,"tag_name":"v1.1.0-rc1","name":"Release candidate","draft":false,"prerelease":true},{"id":3,"tag_name":"v0.1.0","name":"Draft","draft":true,"prerelease":false}]`}
 	result, err := NewRESTAdapter(transport).List(context.Background(), applicationrelease.ListRequest{Owner: "alice", Name: "project", Page: 2, Limit: 20})
@@ -137,6 +165,50 @@ func TestRESTAdapterInspectMapsNotFoundSafely(t *testing.T) {
 	_, err := NewRESTAdapter(errorTransport{err: statusError(http.StatusNotFound)}).Inspect(context.Background(), applicationrelease.InspectRequest{Owner: "alice", Name: "project", Tag: "v1.0.0"})
 	var appErr apperror.Error
 	if !errors.As(err, &appErr) || appErr.Category != apperror.NotFound || appErr.Message != "release not found" {
+		t.Fatalf("error = %#v, want safe not-found application error", err)
+	}
+}
+
+func TestRESTAdapterCreateSendsDraftPayload(t *testing.T) {
+	transport := &jsonStubTransport{}
+	request := applicationrelease.CreateRequest{Owner: "alice", Name: "project", Tag: "v1.0.0", Title: "First release", Notes: "Notes", Prerelease: true}
+	result, err := NewRESTAdapter(transport).Create(context.Background(), request)
+	if err != nil || result.TagName != "v1.0.0" || result.Title != "First release" {
+		t.Fatalf("unexpected result: %+v err=%v", result, err)
+	}
+	if transport.method != http.MethodPost || transport.path != "/api/v1/repos/alice/project/releases" {
+		t.Fatalf("unexpected request: method=%s path=%s", transport.method, transport.path)
+	}
+	if string(transport.body) != `{"tag_name":"v1.0.0","name":"First release","body":"Notes","draft":true,"prerelease":true}` {
+		t.Fatalf("unexpected body: %s", transport.body)
+	}
+}
+
+func TestRESTAdapterCreateMapsHTTPError(t *testing.T) {
+	tests := []struct {
+		status   int
+		category apperror.Category
+	}{
+		{http.StatusUnauthorized, apperror.Authentication},
+		{http.StatusForbidden, apperror.Authentication},
+		{http.StatusNotFound, apperror.NotFound},
+		{http.StatusConflict, apperror.Conflict},
+		{http.StatusUnprocessableEntity, apperror.Validation},
+		{http.StatusInternalServerError, apperror.Remote},
+	}
+	for _, test := range tests {
+		_, err := NewRESTAdapter(&jsonStubTransport{err: statusError(test.status)}).Create(context.Background(), applicationrelease.CreateRequest{Owner: "alice", Name: "project", Tag: "v1.0.0", Title: "First release"})
+		var appErr apperror.Error
+		if !errors.As(err, &appErr) || appErr.Category != test.category {
+			t.Fatalf("status %d: unexpected error %#v", test.status, err)
+		}
+	}
+}
+
+func TestRESTAdapterCreateMapsNotFoundSafely(t *testing.T) {
+	_, err := NewRESTAdapter(&jsonStubTransport{err: statusError(http.StatusNotFound)}).Create(context.Background(), applicationrelease.CreateRequest{Owner: "alice", Name: "project", Tag: "v1.0.0", Title: "First release"})
+	var appErr apperror.Error
+	if !errors.As(err, &appErr) || appErr.Category != apperror.NotFound || appErr.Message != "repository not found" {
 		t.Fatalf("error = %#v, want safe not-found application error", err)
 	}
 }

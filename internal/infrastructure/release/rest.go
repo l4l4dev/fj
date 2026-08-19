@@ -16,6 +16,10 @@ type transport interface {
 	Do(context.Context, string, string, url.Values) (*http.Response, error)
 }
 
+type jsonTransport interface {
+	DoJSON(context.Context, string, string, url.Values, []byte) (*http.Response, error)
+}
+
 type RESTAdapter struct{ transport transport }
 
 type forgejoRelease struct {
@@ -81,6 +85,55 @@ func (a *RESTAdapter) Inspect(ctx context.Context, request applicationrelease.In
 	return applicationrelease.ReleaseDetail{ID: decoded.ID, TagName: decoded.TagName, Title: decoded.Name, Draft: decoded.Draft, Prerelease: decoded.Prerelease, Notes: decoded.Body, Assets: assets}, nil
 }
 
+func (a *RESTAdapter) Create(ctx context.Context, request applicationrelease.CreateRequest) (applicationrelease.ReleaseDetail, error) {
+	jsonClient, ok := a.transport.(jsonTransport)
+	if !ok {
+		return applicationrelease.ReleaseDetail{}, apperror.New(apperror.Remote, "create release", "")
+	}
+	body, err := json.Marshal(struct {
+		TagName    string `json:"tag_name"`
+		Name       string `json:"name"`
+		Body       string `json:"body"`
+		Draft      bool   `json:"draft"`
+		Prerelease bool   `json:"prerelease"`
+	}{TagName: request.Tag, Name: request.Title, Body: request.Notes, Draft: true, Prerelease: request.Prerelease})
+	if err != nil {
+		return applicationrelease.ReleaseDetail{}, apperror.New(apperror.Remote, "create release", "")
+	}
+	path := "/api/v1/repos/" + url.PathEscape(request.Owner) + "/" + url.PathEscape(request.Name) + "/releases"
+	response, err := jsonClient.DoJSON(ctx, http.MethodPost, path, nil, body)
+	if err != nil {
+		return applicationrelease.ReleaseDetail{}, translateCreateError(err)
+	}
+	defer response.Body.Close()
+	var decoded forgejoReleaseDetail
+	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
+		return applicationrelease.ReleaseDetail{}, apperror.New(apperror.Remote, "create release", "")
+	}
+	assets := make([]applicationrelease.Asset, 0, len(decoded.Assets))
+	for _, asset := range decoded.Assets {
+		assets = append(assets, applicationrelease.Asset{ID: asset.ID, Name: asset.Name, Size: asset.Size})
+	}
+	return applicationrelease.ReleaseDetail{ID: decoded.ID, TagName: decoded.TagName, Title: decoded.Name, Draft: decoded.Draft, Prerelease: decoded.Prerelease, Notes: decoded.Body, Assets: assets}, nil
+}
+
+func translateCreateError(err error) error {
+	var status interface{ StatusCode() int }
+	if errors.As(err, &status) {
+		switch status.StatusCode() {
+		case 401, 403:
+			return apperror.New(apperror.Authentication, "create release", "permission denied or authentication failed")
+		case 404:
+			return apperror.New(apperror.NotFound, "create release", "repository not found")
+		case 409:
+			return apperror.New(apperror.Conflict, "create release", "a release for this tag already exists")
+		case 422:
+			return apperror.New(apperror.Validation, "create release", "release tag or metadata was rejected by the remote service")
+		}
+	}
+	return apperror.New(apperror.Remote, "create release", "")
+}
+
 func translateInspectError(err error) error {
 	var status interface{ StatusCode() int }
 	if errors.As(err, &status) {
@@ -109,3 +162,4 @@ func translateListError(err error) error {
 
 var _ applicationrelease.Lister = (*RESTAdapter)(nil)
 var _ applicationrelease.Inspector = (*RESTAdapter)(nil)
+var _ applicationrelease.Creator = (*RESTAdapter)(nil)

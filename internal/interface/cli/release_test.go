@@ -127,3 +127,47 @@ func TestReleaseInspectRejectsInvalidInput(t *testing.T) {
 		}
 	}
 }
+
+type releaseCreatorStub struct {
+	request applicationrelease.CreateRequest
+}
+
+func (s *releaseCreatorStub) Create(_ context.Context, request applicationrelease.CreateRequest) (applicationrelease.ReleaseDetail, error) {
+	s.request = request
+	return applicationrelease.ReleaseDetail{TagName: request.Tag, Title: request.Title, Draft: true, Prerelease: request.Prerelease}, nil
+}
+
+func TestReleaseCreateOutputAndRequest(t *testing.T) {
+	creator := &releaseCreatorStub{}
+	command := newReleaseCreateCommand(creator)
+	command.SetArgs([]string{"alice/project", "--tag", "v1.0.0", "--title", "First release", "--notes", "Notes", "--prerelease"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if creator.request.Owner != "alice" || creator.request.Name != "project" || creator.request.Tag != "v1.0.0" || creator.request.Title != "First release" || creator.request.Notes != "Notes" || !creator.request.Prerelease {
+		t.Fatalf("unexpected request: %+v", creator.request)
+	}
+	want := "Release created as draft: v1.0.0\nTitle: First release\nPrerelease: true\n"
+	if output.String() != want {
+		t.Fatalf("unexpected output: %q", output.String())
+	}
+}
+
+func TestReleaseCreateRejectsInvalidInput(t *testing.T) {
+	tests := [][]string{
+		{"invalid", "--tag", "v1.0.0", "--title", "First release"},
+		{"alice/project", "--title", "First release"},
+		{"alice/project", "--tag", "v 1", "--title", "First release"},
+		{"alice/project", "--tag", "v1.0.0"},
+		{"alice/project", "--tag", "v1.0.0", "--title", "  "},
+	}
+	for _, args := range tests {
+		command := newReleaseCreateCommand(&releaseCreatorStub{})
+		command.SetArgs(args)
+		if err := command.Execute(); err == nil {
+			t.Fatalf("expected validation error for %v", args)
+		}
+	}
+}
