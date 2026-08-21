@@ -2,7 +2,9 @@ package cli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -62,14 +64,52 @@ func readLoginToken(command *cobra.Command, tokenStdin bool, endpoint string) (s
 		line, _ := bufio.NewReader(command.InOrStdin()).ReadString('\n')
 		return strings.TrimSpace(line), nil
 	}
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
 		return "", newCommandError(categoryValidation, "auth login", fmt.Errorf("stdin is not a terminal; use --token-stdin"))
 	}
 	command.PrintErrf("Token for %s: ", endpoint)
-	entered, err := term.ReadPassword(int(os.Stdin.Fd()))
-	command.PrintErrln()
+	oldState, err := term.MakeRaw(fd)
 	if err != nil {
 		return "", newCommandError(categoryValidation, "auth login", fmt.Errorf("could not read the token from the terminal"))
 	}
-	return strings.TrimSpace(string(entered)), nil
+	defer term.Restore(fd, oldState)
+	entered, err := readMaskedToken(bufio.NewReader(os.Stdin), command.ErrOrStderr())
+	if err != nil {
+		return "", newCommandError(categoryValidation, "auth login", fmt.Errorf("could not read the token from the terminal"))
+	}
+	return strings.TrimSpace(entered), nil
+}
+
+var errTokenEntryInterrupted = errors.New("token entry interrupted")
+
+// readMaskedToken reads raw terminal bytes until Enter, echoing one mask
+// character per printable byte instead of the byte itself so a paste is
+// visible without revealing the token. Backspace/Delete erase the last byte.
+// Ctrl+C aborts with errTokenEntryInterrupted.
+// ponytail: printable ASCII only, no multibyte-aware backspace; tokens are ASCII.
+func readMaskedToken(reader *bufio.Reader, writer io.Writer) (string, error) {
+	var buf []byte
+	for {
+		b, err := reader.ReadByte()
+		if err != nil {
+			return "", err
+		}
+		switch {
+		case b == '\r' || b == '\n':
+			fmt.Fprint(writer, "\r\n")
+			return string(buf), nil
+		case b == 3: // Ctrl+C
+			fmt.Fprint(writer, "\r\n")
+			return "", errTokenEntryInterrupted
+		case b == 127 || b == 8: // Backspace/Delete
+			if len(buf) > 0 {
+				buf = buf[:len(buf)-1]
+				fmt.Fprint(writer, "\b \b")
+			}
+		case b >= 32 && b < 127:
+			buf = append(buf, b)
+			fmt.Fprint(writer, "●")
+		}
+	}
 }

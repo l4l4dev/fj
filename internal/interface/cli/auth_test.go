@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"os"
@@ -123,6 +124,53 @@ func TestAuthLoginRequiresTokenStdinWithoutTerminal(t *testing.T) {
 	}
 	if verifier.calls != 0 || store.calls != 0 {
 		t.Error("Execute() used its dependencies without a token source")
+	}
+}
+
+func TestReadMaskedTokenEchoesMaskPerByteAndTrims(t *testing.T) {
+	var out strings.Builder
+	token, err := readMaskedToken(bufio.NewReader(strings.NewReader("ab\n")), &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != "ab" {
+		t.Errorf("token = %q, want %q", token, "ab")
+	}
+	if out.String() != "●●\r\n" {
+		t.Errorf("echoed = %q, want %q", out.String(), "●●\r\n")
+	}
+}
+
+func TestReadMaskedTokenBackspaceErasesLastByte(t *testing.T) {
+	var out strings.Builder
+	token, err := readMaskedToken(bufio.NewReader(strings.NewReader("ab\x7fc\n")), &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != "ac" {
+		t.Errorf("token = %q, want %q", token, "ac")
+	}
+	if out.String() != "●●\b \b●\r\n" {
+		t.Errorf("echoed = %q, want %q", out.String(), "●●\b \b●\r\n")
+	}
+}
+
+func TestReadMaskedTokenBackspaceOnEmptyBufferIsNoop(t *testing.T) {
+	var out strings.Builder
+	token, err := readMaskedToken(bufio.NewReader(strings.NewReader("\x7fa\n")), &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != "a" {
+		t.Errorf("token = %q, want %q", token, "a")
+	}
+}
+
+func TestReadMaskedTokenCtrlCInterrupts(t *testing.T) {
+	var out strings.Builder
+	_, err := readMaskedToken(bufio.NewReader(strings.NewReader("ab\x03cd\n")), &out)
+	if !errors.Is(err, errTokenEntryInterrupted) {
+		t.Fatalf("err = %v, want errTokenEntryInterrupted", err)
 	}
 }
 
